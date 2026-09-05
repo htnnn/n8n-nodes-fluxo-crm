@@ -27,6 +27,20 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   diferentes também para a execução, em vez de gravar um dos dois em silêncio.
   Instância com API anterior às flags continua exatamente como antes.
 
+- **Os 34 eventos de webhook do servidor, com rótulo em português.** O gatilho
+  e `Webhook › Criar/Atualizar` passam a conhecer os oito eventos novos —
+  `etiqueta.adicionada`, `etiqueta.removida`, `conversa.iniciada`,
+  `conversa.resolvida`, `mensagem.recebida`, `mensagem.enviada`,
+  `automacao.executada`, `automacao.falhou` — e todo evento aparece com rótulo
+  (`Atendimento › Mensagem Recebida`, `Automacao › Falhou`…) em vez do
+  identificador cru. Evento que o servidor devolva e este pacote ainda não
+  conheça ganha rótulo derivado do identificador, sem sumir da lista.
+
+- **`Webhook › Criar` no node de ação ganhou o mesmo fallback do gatilho.** Sem
+  `webhooks:ler` (uma chave só de escrita), `GET /webhooks/eventos` responde
+  403 e o dropdown abria vazio; agora cai para a lista estática dos 34, nos
+  dois nodes, a partir de uma única tabela.
+
 ### Corrigido
 
 - `Registro › Atualizar` só com a equipe preenchida devolvia 422: o `PATCH`
@@ -45,6 +59,12 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   execução recusa se vierem por expressão.
 - `criado_por` e `atualizado_por` aparecem no dicionário, mas a leitura da v1
   ainda não os devolve nos registros, contatos e empresas.
+- **Os oito eventos novos exigem a API com os emissores de domínio.** Numa
+  instância anterior eles não existem: `POST /webhooks` recusa a assinatura com
+  422 nomeando o evento, e os demais eventos continuam disparando só para
+  escrita feita pela API v1. Nessas instâncias, a sondagem segue sendo o
+  caminho para atendimento. O node não tem como saber a versão antes de
+  tentar — a recusa vem do servidor.
 
 ## [0.1.1] - 2026-09-05
 

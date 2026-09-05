@@ -28,7 +28,7 @@ export const MODOS: ModoDoGatilho[] = [
 		valor: 'polling',
 		nome: 'Sondagem Periodica',
 		descricao:
-			'Consulta a API em intervalos. Nao precisa de endereco publico e e o UNICO caminho para atendimento (conversas e mensagens nao emitem webhook).',
+			'Consulta a API em intervalos. Nao precisa de endereco publico, e e o caminho para reagir a atendimento numa instancia cuja API ainda nao emite os eventos de conversa e mensagem.',
 		escopo: null,
 	},
 	{
@@ -41,73 +41,17 @@ export const MODOS: ModoDoGatilho[] = [
 ];
 
 // ── Eventos ──────────────────────────────────────────────────────────
-
-/**
- * Espelho de `EVENTOS_DISPONIVEIS` (`api-publica/webhooks.ts`), na mesma ordem.
- *
- * Serve de fallback quando a chave nao tem `webhooks:ler` e `GET /webhooks/eventos`
- * responde 403 — sem ele o `multiOptions` ficaria vazio e o usuario nao teria
- * como assinar nada com uma chave que so tem `webhooks:escrever`.
- *
- * `webhook.teste` NAO entra: e emitido apenas por `POST /webhooks/:id/testar` e
- * o servidor recusa assinatura que o cite (`eventoValido` nao o conhece).
- */
-export const EVENTOS_CONHECIDOS: readonly string[] = [
-	'contato.criado',
-	'contato.atualizado',
-	'contato.removido',
-	'empresa.criada',
-	'empresa.atualizada',
-	'empresa.removida',
-	'lead.criado',
-	'lead.atualizado',
-	'lead.convertido',
-	'lead.removido',
-	'negocio.criado',
-	'negocio.atualizado',
-	'negocio.estagio_alterado',
-	'negocio.ganho',
-	'negocio.perdido',
-	'negocio.removido',
-	'atividade.criada',
-	'atividade.atualizada',
-	'atividade.concluida',
-	'interacao.criada',
-	'interacao.atualizada',
-	'interacao.removida',
-	'registro.criado',
-	'registro.atualizado',
-	'registro.removido',
-	'nota.criada',
-];
-
-export const CORINGA_DE_EVENTOS = '*';
-
-/** Rotulo legivel de um evento: `negocio.estagio_alterado` → `Negocio › Estagio Alterado`. */
-export function rotuloDoEvento(evento: string): string {
-	if (evento === CORINGA_DE_EVENTOS) return 'Todos os Eventos';
-
-	const [recurso, ...resto] = evento.split('.');
-	const acao = resto
-		.join('.')
-		.split('_')
-		.map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1))
-		.join(' ');
-	const entidade = recurso.charAt(0).toUpperCase() + recurso.slice(1);
-	return acao === '' ? entidade : `${entidade} › ${acao}`;
-}
-
-export function opcoesDeEvento(eventos: readonly string[]): INodePropertyOptions[] {
-	const lista = [CORINGA_DE_EVENTOS, ...eventos.filter((e) => e !== CORINGA_DE_EVENTOS)];
-	return lista.map((evento) => ({
-		name: rotuloDoEvento(evento),
-		value: evento,
-		description:
-			evento === CORINGA_DE_EVENTOS
-				? 'Assina todos os eventos, inclusive os que o Fluxo CRM criar depois'
-				: `Identificador na API: ${evento}`,
-	}));
-}
+//
+// A tabela mora em `compartilhado/eventos.ts`, junto do node de acoes: os dois
+// `multiOptions` de eventos (o deste gatilho e o de `Webhook › Criar`) leem a
+// mesma lista, os mesmos rotulos e o mesmo fallback. Reexportada aqui para os
+// consumidores do gatilho continuarem importando do catalogo dele.
+export {
+	CORINGA_DE_EVENTOS,
+	EVENTOS_CONHECIDOS,
+	opcoesDeEvento,
+	rotuloDoEvento,
+} from '../FluxoCrm/compartilhado/eventos';
 
 // ── Recursos sondaveis ───────────────────────────────────────────────
 
@@ -156,7 +100,8 @@ export const RECURSOS_SONDAVEIS: RecursoSondavel[] = [
 	{
 		valor: 'conversa',
 		nome: 'Atendimento › Conversa',
-		descricao: 'Conversas novas ou com mensagem nova. Nao existe webhook para isto.',
+		descricao:
+			'Conversas novas ou com mensagem nova (WhatsApp e demais canais). Alternativa aos eventos conversa.iniciada e mensagem.recebida do modo Webhook, para instancia sem eles.',
 		escopo: 'atendimento:ler',
 		caminho: '/atendimento/conversas',
 		// A rota nao tem filtro "depois de": o cursor dela e `antes_de`, e a
@@ -171,7 +116,7 @@ export const RECURSOS_SONDAVEIS: RecursoSondavel[] = [
 		valor: 'mensagem',
 		nome: 'Atendimento › Mensagem',
 		descricao:
-			'Mensagens novas nas conversas que se moveram. Nao existe webhook para isto — este e o unico caminho.',
+			'Mensagens novas nas conversas que se moveram (WhatsApp e demais canais). Alternativa ao evento mensagem.recebida do modo Webhook, para instancia sem ele.',
 		escopo: 'atendimento:ler',
 		caminho: '/atendimento/conversas',
 		filtroDeCriacao: null,

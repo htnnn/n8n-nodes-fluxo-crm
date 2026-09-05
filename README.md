@@ -246,35 +246,33 @@ slug, inclusive os personalizados que este node não conhece pelo nome.
 Estas restrições são do **servidor**, não do node. Elas mudam qual modo resolve
 o seu caso, então vêm primeiro.
 
-#### 1. Webhooks só disparam para escritas feitas **pela API v1**
+#### 1. O que o webhook cobre depende da versão da API do servidor
 
-O evento é emitido exclusivamente pelas rotas da API pública. **O que a sua
-equipe faz na tela do Fluxo CRM não emite evento nenhum.**
+Com a API que tem os **emissores de domínio** (`eventos-dominio.ts`), os
+eventos saem de qualquer porta — inclusive do que a equipe faz na tela do CRM —
+e existem os 34 eventos listados abaixo, com os de **etiqueta**, **atendimento**
+(`conversa.iniciada`, `conversa.resolvida`, `mensagem.recebida`,
+`mensagem.enviada`) e **automação**. "Disparar quando chegar mensagem no
+WhatsApp" é `mensagem.recebida`.
 
-Um contato criado pelo comercial na interface do CRM **não** dispara
-`contato.criado`. Só dispara o contato criado por uma integração que chamou
-`POST /v1/contatos`.
+Numa instância com API **anterior** a isso:
 
-> Há correção em andamento no servidor. Enquanto ela não chega, este é o
-> comportamento real — e quem precisa reagir ao trabalho humano hoje precisa usar
-> o modo **Sondagem**.
+- os eventos só disparam para escritas feitas **pela API v1** — um contato
+  criado pelo comercial na interface **não** dispara `contato.criado`;
+- os oito eventos mais novos **não existem**: assiná-los devolve 422 nomeando o
+  evento, e o modo **Sondagem** continua sendo o único caminho para atendimento.
 
-#### 2. Atendimento não emite evento nenhum
+O node não tem como saber a versão da instância antes de tentar; a recusa vem do
+servidor, com o evento nomeado.
 
-Não existe `conversa.criada`, nem `mensagem.recebida`, nem `conversa.atribuida`.
-Nenhum evento de atendimento existe no servidor.
-
-**"Disparar quando chegar mensagem no WhatsApp" só funciona por sondagem.** Não
-há webhook para isso, e não é uma limitação que este node possa contornar.
-
-#### 3. Eventos que não existem
+#### 2. Eventos que não existem em nenhuma versão
 
 - Não existe `atividade.removida` (as outras três de atividade existem).
 - Não existe nenhum evento de **pipeline** ou de **estágio**.
 - Não existe nenhum evento de **arquivo**.
 - Não existe nenhum evento do **próprio webhook**.
 
-#### 4. "Tempo real" é *até ~1 minuto*
+#### 3. "Tempo real" é *até ~1 minuto*
 
 A entrega dos eventos sai de um **cron de 1 minuto**. Uma escrita feita agora
 pode levar até cerca de um minuto para virar uma chamada ao seu workflow. O
@@ -282,7 +280,7 @@ mesmo teto vale para a sondagem: o intervalo mínimo do n8n também é 1 minuto.
 
 Se o seu caso exige latência abaixo disso, este gatilho não atende.
 
-#### 5. Datas de saída **não são normalizadas**
+#### 4. Datas de saída **não são normalizadas**
 
 O node **não mexe na saída** da API — de propósito, porque converter só em
 alguns lugares produziria duas convenções no mesmo fluxo.
@@ -321,7 +319,7 @@ endereço público, use Sondagem.
 | **Ignorar Entrega de Teste**    | Descarta a entrega gerada pelo botão "Testar" do CRM (`webhook.teste`) |
 | **Incluir Metadados da Entrega** | Acrescenta `__entrega` à saída, com o ID e os cabeçalhos recebidos    |
 
-**Eventos disponíveis** (26, mais o coringa `*`):
+**Eventos disponíveis** (34, mais o coringa `*`):
 
 `contato.criado` · `contato.atualizado` · `contato.removido` ·
 `empresa.criada` · `empresa.atualizada` · `empresa.removida` ·
@@ -331,7 +329,17 @@ endereço público, use Sondagem.
 `atividade.criada` · `atividade.atualizada` · `atividade.concluida` ·
 `interacao.criada` · `interacao.atualizada` · `interacao.removida` ·
 `registro.criado` · `registro.atualizado` · `registro.removido` ·
-`nota.criada`
+`nota.criada` ·
+`etiqueta.adicionada` · `etiqueta.removida` ·
+`conversa.iniciada` · `conversa.resolvida` ·
+`mensagem.recebida` · `mensagem.enviada` ·
+`automacao.executada` · `automacao.falhou`
+
+Os oito últimos (etiqueta, atendimento e automação) só existem em instâncias
+cuja API já tem os emissores de domínio — numa anterior, a assinatura é
+recusada com 422 nomeando o evento. A lista do dropdown vem do servidor quando
+a chave tem `webhooks:ler`; sem esse escopo, o node usa a lista estática acima,
+nos dois nodes.
 
 **Toda entrega é verificada.** O cabeçalho `X-Fluxo-Signature` traz
 `t=<unix>,v1=<hex>`, onde `v1 = HMAC_SHA256(segredo, "<t>.<corpo bruto>")`. A
@@ -363,13 +371,14 @@ Escopo exigido: `webhooks:escrever`.
 
 ### Modo Sondagem Periódica
 
-Consulta a API em intervalos. **Não precisa de endereço público**, e é o **único
-caminho para atendimento**.
+Consulta a API em intervalos. **Não precisa de endereço público**, e é o caminho
+para atendimento numa instância cuja API ainda não emite os eventos de conversa
+e mensagem.
 
 | Recurso a Sondar          | Escopo             | Observação                                       |
 | ------------------------- | ------------------ | ------------------------------------------------ |
-| **Atendimento › Conversa** | `atendimento:ler`  | Não existe webhook para isto                     |
-| **Atendimento › Mensagem** | `atendimento:ler`  | Não existe webhook — este é o único caminho      |
+| **Atendimento › Conversa** | `atendimento:ler`  | Alternativa a `conversa.iniciada`/`mensagem.recebida` em instância sem eles |
+| **Atendimento › Mensagem** | `atendimento:ler`  | Alternativa a `mensagem.recebida` em instância sem ele |
 | **Atividade**             | `atividades:ler`   | Só "For Criado" (a rota não expõe `atualizado_apos`) |
 | **Contato**               | `contatos:ler`     |                                                  |
 | **Empresa**               | `empresas:ler`     |                                                  |
@@ -480,8 +489,10 @@ em cada node — os exemplos trazem um `id` de espaço reservado.
 
 ### 1. Mensagem nova no atendimento → nota interna com o horário
 
-Demonstra o único caminho para atendimento: **sondagem**. A cada minuto lê as
-mensagens recebidas e registra uma nota interna na conversa.
+Demonstra a **sondagem**, o caminho para atendimento numa instância cuja API
+ainda não emite `mensagem.recebida`. A cada minuto lê as mensagens recebidas e
+registra uma nota interna na conversa. (Com a API atual, o mesmo fluxo cabe no
+modo Webhook com o evento `mensagem.recebida`.)
 
 ```json
 {

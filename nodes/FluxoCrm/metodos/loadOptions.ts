@@ -6,6 +6,7 @@ import {
 	opcoesDeOperacaoComEscopo,
 	opcoesDeRecursoComEscopo,
 } from '../compartilhado/catalogo';
+import { opcoesDeEventosAssinaveis } from '../compartilhado/eventos';
 import { requisitar } from '../compartilhado/transporte';
 
 /**
@@ -245,29 +246,16 @@ export async function carregarAgentes(
 		.filter((opcao) => opcao.value !== '');
 }
 
-/** O coringa aceito por `POST /webhooks`, que NAO aparece na listagem da API. */
-const CORINGA_DE_EVENTO: INodePropertyOptions = {
-	// eslint-disable-next-line n8n-nodes-base/node-param-display-name-miscased -- e o valor coringa da API renderizado como rotulo, nao um nome de campo; title case do ingles o transformaria em outra coisa
-	name: '* (todos os eventos)',
-	value: '*',
-	description: 'Assina todos os eventos, inclusive os que a API vier a acrescentar',
-};
-
+/**
+ * Os eventos de `Webhook › Criar` e `Atualizar`: do servidor quando possivel,
+ * da lista estatica quando nao — a mesma rotina do gatilho
+ * (`compartilhado/eventos.ts`). O coringa `*` vem primeiro, com rotulo; formas
+ * como `contato:*` e `contato.*` NAO sao aceitas pela API.
+ */
 export async function carregarEventosWebhook(
 	this: ILoadOptionsFunctions,
 ): Promise<INodePropertyOptions[]> {
-	const resposta = await requisitar(this, { metodo: 'GET', caminho: '/webhooks/eventos' });
-	const corpo = resposta.corpo as IDataObject;
-	const linhas = Array.isArray(corpo?.dados) ? corpo.dados : [];
-
-	const eventos = linhas
-		.map((linha) => (typeof linha === 'string' ? linha : texto((linha as IDataObject)?.evento)))
-		.filter((evento) => evento !== '')
-		.map((evento) => ({ name: evento, value: evento }));
-
-	// O coringa e acrescentado a mao porque o validador o aceita e a listagem nao
-	// o inclui. Formas como `contato:*` e `contato.*` NAO sao aceitas.
-	return [CORINGA_DE_EVENTO, ...eventos];
+	return await opcoesDeEventosAssinaveis(this);
 }
 
 /** O slug do modulo escolhido no painel, para os dropdowns que dependem dele. */

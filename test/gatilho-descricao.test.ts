@@ -100,15 +100,18 @@ describe('descricao do node', () => {
 });
 
 describe('catalogo do gatilho', () => {
-	it('espelha os 26 eventos do servidor e NAO oferece webhook.teste, que nao e assinavel', () => {
-		expect(EVENTOS_CONHECIDOS).toHaveLength(26);
+	it('espelha os 34 eventos do servidor e NAO oferece webhook.teste, que nao e assinavel', () => {
+		// A lista completa, evento a evento, esta em `test/eventos.test.ts`.
+		expect(EVENTOS_CONHECIDOS).toHaveLength(34);
 		expect(EVENTOS_CONHECIDOS).toContain('interacao.criada');
 		expect(EVENTOS_CONHECIDOS).toContain('negocio.estagio_alterado');
+		expect(EVENTOS_CONHECIDOS).toContain('conversa.iniciada');
+		expect(EVENTOS_CONHECIDOS).toContain('mensagem.recebida');
 		expect(EVENTOS_CONHECIDOS).not.toContain('webhook.teste');
-		// Lacunas conhecidas, registradas aqui para que sumir com elas quebre o teste.
+		// Lacunas que continuam, registradas aqui para que sumir com elas quebre o teste.
 		expect(EVENTOS_CONHECIDOS).not.toContain('atividade.removida');
-		expect(EVENTOS_CONHECIDOS.some((evento) => evento.startsWith('conversa.'))).toBe(false);
-		expect(EVENTOS_CONHECIDOS.some((evento) => evento.startsWith('mensagem.'))).toBe(false);
+		expect(EVENTOS_CONHECIDOS.some((evento) => evento.startsWith('pipeline.'))).toBe(false);
+		expect(EVENTOS_CONHECIDOS.some((evento) => evento.startsWith('arquivo.'))).toBe(false);
 	});
 
 	it('poe o coringa em primeiro e nao o duplica quando ele ja vem do servidor', () => {

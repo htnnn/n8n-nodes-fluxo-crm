@@ -43,16 +43,19 @@ const EVENTO_DE_TESTE = 'webhook.teste';
  * `checkExists` devolve `true` em sondagem (nada a registrar, nada a criar) e
  * `poll` devolve `null` em webhook.
  *
- * O que este node NAO consegue fazer, e por que:
+ * O que depende da VERSAO da API do servidor (`compartilhado/eventos.ts`):
  *
- * - **Atendimento nao tem webhook.** Nenhum evento de conversa, mensagem ou
- *   atribuicao existe em `EVENTOS_DISPONIVEIS`. "Disparar quando chegar
- *   mensagem no WhatsApp" so funciona por sondagem.
- * - **Os eventos so nascem de escrita PELA API.** `emitirEvento` e chamado
- *   exclusivamente das rotas de `api-publica/`; o que a equipe faz na tela do
- *   CRM nao emite nada.
- * - Nao existe `atividade.removida`, nem evento de pipeline/estagio, arquivo ou
- *   do proprio webhook.
+ * - Com os emissores de dominio (`eventos-dominio.ts`), os eventos saem de
+ *   qualquer porta — tela do CRM inclusive — e existem os de etiqueta,
+ *   atendimento (conversa iniciada/resolvida, mensagem recebida/enviada) e
+ *   automacao. "Disparar quando chegar mensagem no WhatsApp" e
+ *   `mensagem.recebida`.
+ * - Numa instancia anterior, `emitirEvento` so era chamado das rotas de
+ *   `api-publica/` (o que a equipe faz na tela nao emitia nada) e os oito
+ *   eventos mais novos nao existem — assina-los devolve 422. Ali, a sondagem
+ *   continua sendo o caminho para atendimento.
+ * - Em nenhuma versao existe `atividade.removida`, nem evento de
+ *   pipeline/estagio, arquivo ou do proprio webhook.
  */
 export class FluxoCrmTrigger implements INodeType {
 	description: INodeTypeDescription = {

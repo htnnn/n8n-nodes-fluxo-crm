@@ -34,7 +34,7 @@ export const descricaoDoGatilho: INodeProperties[] = [
 	// ── Webhook ──────────────────────────────────────────────────────
 	{
 		displayName:
-			'Os webhooks da API v1 disparam quando a escrita passa PELA API — o que a equipe faz na tela do Fluxo CRM nao emite evento. E nao existe evento de atendimento (conversa, mensagem, atribuicao). Para esses casos, use o modo Sondagem.',
+			'A lista traz os 34 eventos que a API atual emite, inclusive os de etiqueta, atendimento (conversa iniciada/resolvida, mensagem recebida/enviada) e automacao. Numa instancia com API anterior, os eventos so disparam para escrita feita PELA API v1 — o que a equipe faz na tela nao emite — e os oito mais novos nao existem: a assinatura e recusada. Para reagir a atendimento nessas instancias, use o modo Sondagem.',
 		name: 'avisoDoWebhook',
 		type: 'notice',
 		default: '',

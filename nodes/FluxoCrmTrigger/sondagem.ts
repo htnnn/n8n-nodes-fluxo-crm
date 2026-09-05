@@ -17,13 +17,13 @@ import {
  *
  * Ele existe por duas razoes, e nenhuma delas e conveniencia:
  *
- * 1. **Atendimento nao tem evento de webhook nenhum.** Nao ha
- *    `conversa.criada`, nem `mensagem.recebida`, nem `conversa.atribuida`.
- *    "Disparar quando chegar mensagem no WhatsApp" so existe por aqui.
- * 2. **Os webhooks da v1 so disparam quando a escrita passou PELA API.**
- *    `emitirEvento` e chamado exclusivamente de `api-publica/rotas/*`; o que a
- *    equipe faz na tela do CRM nao emite nada. Quem quiser reagir ao trabalho
- *    humano precisa sondar.
+ * 1. **Instancia sem endereco publico** nao recebe webhook nenhum.
+ * 2. **Instancia com API anterior aos emissores de dominio** nao tem evento de
+ *    atendimento (`conversa.iniciada`, `mensagem.recebida`...) e so emite os
+ *    demais quando a escrita passou PELA API v1 — o que a equipe fazia na tela
+ *    do CRM nao emitia nada. Ali, "disparar quando chegar mensagem no
+ *    WhatsApp" so existe por aqui. Com a API atual, o modo Webhook cobre os
+ *    dois casos (`compartilhado/eventos.ts`).
  *
  * Teto do plano: o intervalo minimo do n8n e 1 minuto e a API aceita 120
  * requisicoes por minuto por chave — por isso todo laco aqui tem teto de
