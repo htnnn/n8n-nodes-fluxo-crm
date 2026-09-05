@@ -157,6 +157,35 @@ function extrairEnvelope(erro: unknown): {
 	};
 }
 
+/**
+ * Status, codigo e mensagem de um erro, em qualquer forma que ele chegue.
+ *
+ * Olha tambem onde o `NodeApiError` de `erroDaApi` guarda o erro original do
+ * helper: `NodeError` poe um `Error` em `cause` e qualquer outro objeto em
+ * `errorResponse` (`errors/abstract/node.error.js`). E la que esta o envelope
+ * `{erro: {codigo}}`; sem isso, quem recebe o erro ja embrulhado enxergaria o
+ * status (que `erroDaApi` copia para `httpCode`) mas nunca o codigo da API.
+ */
+export function resumoDoErro(erro: unknown): {
+	status: number | undefined;
+	codigo: string;
+	mensagem: string;
+} {
+	const raiz = comoObjeto(erro);
+	const camadas = [erro, raiz?.errorResponse, raiz?.cause]
+		.filter((camada) => camada !== undefined && camada !== null)
+		.map((camada) => extrairEnvelope(camada));
+
+	const status = camadas.map((camada) => camada.status).find((valor) => valor !== undefined);
+	const envelope = camadas.map((camada) => camada.erro).find((valor) => valor !== null) ?? null;
+
+	return {
+		status,
+		codigo: typeof envelope?.codigo === 'string' ? envelope.codigo : '',
+		mensagem: typeof envelope?.mensagem === 'string' ? envelope.mensagem : '',
+	};
+}
+
 function detalhesLegiveis(envelope: EnvelopeDeErro | null): string {
 	if (envelope === null || !Array.isArray(envelope.detalhes)) return '';
 	const linhas = envelope.detalhes

@@ -43,6 +43,17 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ### Corrigido
 
+- **A descoberta diz o que falhou de verdade.** Quando `/v1/capabilities` e
+  `/v1/me` falham, o node deixava de bloquear operações (fail-open, como
+  antes) mas mandava "conferir a conectividade" para qualquer causa. Agora
+  cada falha é classificada pelo status: 404 só em `/capabilities` segue para
+  `/me` em silêncio; 404 nos dois é "Esta instância do Fluxo CRM está
+  desatualizada: a API não expõe /v1/capabilities nem /v1/me. Atualize a API
+  do CRM."; 401 é credencial recusada e 403 é falta de permissão, com o código
+  que a API devolveu; e só a ausência de resposta é conectividade. Os dropdowns
+  de descoberta (usuários, equipes, pipelines, etiquetas, módulos) recebem o
+  mesmo motivo, e falha de rede deixa de ser memorizada por um minuto como
+  "instância sem `/capabilities`".
 - `Registro › Atualizar` só com a equipe preenchida devolvia 422: o `PATCH`
   exige a chave `valores` mesmo vazia, e o node passou a enviá-la (`{}` mescla
   nada e preserva tudo).

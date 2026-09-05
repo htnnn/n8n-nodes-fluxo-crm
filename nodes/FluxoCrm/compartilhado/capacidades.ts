@@ -1,5 +1,11 @@
 import type { IDataObject } from 'n8n-workflow';
 
+import {
+	classificarFalhaDeDescoberta,
+	diagnosticarDescoberta,
+	endpointAusente,
+	type ErroDeDescoberta,
+} from './descoberta';
 import { impressaoDaCredencial, resolverEscopos, type EstadoDeEscopos } from './escopos';
 import { NOME_DA_CREDENCIAL, requisitar, type ContextoDeRequisicao } from './transporte';
 
@@ -75,31 +81,75 @@ async function impressaoDoContexto(ctx: ContextoDeRequisicao): Promise<string> {
  * As duas rotas deixaram de exigir escopo, mas o fallback para `/me` continua:
  * uma instancia com API anterior a essa mudanca ainda devolve 404 em
  * `/capabilities`, e uma anterior ainda devolve 403 em `/me`.
+ *
+ * O que muda quando as duas falham e o DIAGNOSTICO: cada falha e classificada
+ * pelo status (`descoberta.ts`) e o log diz o que foi — instancia
+ * desatualizada (404 nas duas), credencial recusada (401), sem permissao (403)
+ * ou rede (sem status) — em vez de mandar conferir a conectividade para tudo.
+ * O 404 so no `/capabilities` e o caminho normal de uma instancia anterior a
+ * ele e nao gera aviso nenhum.
  */
 export async function estadoDeEscopos(ctx: ContextoDeRequisicao): Promise<EstadoDeEscopos> {
 	const credenciais = await ctx.getCredentials(NOME_DA_CREDENCIAL);
 	const impressao = impressaoDaCredencial(credenciais.baseUrl, credenciais.apiKey);
+	const falhas: ErroDeDescoberta[] = [];
 
-	return await resolverEscopos({
+	const estado = await resolverEscopos({
 		impressao,
 		carimbo: credenciais.escoposDaChave,
 		fontes: {
 			buscarCapacidades: async () => {
-				const payload = await buscarCapacidades(ctx, impressao);
-				if (payload === null) throw new Error('capabilities indisponivel');
+				let payload: IDataObject | null;
+				try {
+					payload = await buscarCapacidades(ctx, impressao);
+				} catch (erro) {
+					const falha = classificarFalhaDeDescoberta(erro, '/capabilities');
+					falhas.push(falha);
+					throw falha;
+				}
+				if (payload === null) {
+					const falha = endpointAusente('/capabilities');
+					falhas.push(falha);
+					throw falha;
+				}
 				return payload;
 			},
-			buscarContexto: async () => (await requisitar(ctx, { metodo: 'GET', caminho: '/me' })).corpo,
+			buscarContexto: async () => {
+				try {
+					return (await requisitar(ctx, { metodo: 'GET', caminho: '/me' })).corpo;
+				} catch (erro) {
+					const falha = classificarFalhaDeDescoberta(erro, '/me');
+					falhas.push(falha);
+					throw falha;
+				}
+			},
 		},
 		registrarAviso: (mensagem) => ctx.logger.debug(`[Fluxo CRM] ${mensagem}`),
 	});
+
+	// So quando o `/me` — a ultima fonte — falhou: e ai que o fail-open entra, e
+	// o usuario merece saber por que nada esta sendo bloqueado.
+	if (!estado.conhecidos && falhas.some((falha) => falha.rotas.includes('/me'))) {
+		ctx.logger.warn(
+			`[Fluxo CRM] Nao foi possivel descobrir os escopos da chave; nenhuma operacao sera bloqueada na interface. ${
+				diagnosticarDescoberta(falhas).message
+			}`,
+		);
+	}
+
+	return estado;
 }
 
 /**
  * Busca (uma vez por credencial, por minuto) o agregado `/capabilities`.
  *
- * `null` significa "esta instancia nao tem o endpoint" — e a resposta e
+ * `null` significa "esta instancia nao tem o endpoint" (404) — e a resposta e
  * memorizada tambem nesse caso, para nao pagar um 404 por dropdown aberto.
+ *
+ * Qualquer outra falha sobe como `ErroDeDescoberta`, com o motivo, e NAO e
+ * memorizada: credencial recusada e rede fora sao passageiras, e guardar
+ * `null` por um minuto faria todo dropdown seguinte pular para o endpoint
+ * individual — que falharia igual, so que com a frase generica.
  */
 async function buscarCapacidades(
 	ctx: ContextoDeRequisicao,
@@ -116,8 +166,9 @@ async function buscarCapacidades(
 			typeof resposta.corpo === 'object' && resposta.corpo !== null ? resposta.corpo : null;
 		guardarCapacidades(impressao, payload);
 		return payload;
-	} catch {
-		// 404 numa instancia com API anterior ao /capabilities e o caso comum.
+	} catch (erro) {
+		const falha = classificarFalhaDeDescoberta(erro, '/capabilities');
+		if (falha.motivo !== 'endpoint_ausente') throw falha;
 		guardarCapacidades(impressao, null);
 		return null;
 	}
@@ -154,6 +205,12 @@ export function blocoOmitido(agregado: IDataObject | null, bloco: string): boole
  * 3. ha `query` a aplicar (o recorte `?modulo_id=` das etiquetas, por exemplo):
  *    o agregado traz sempre a lista inteira e filtrar aqui reimplementaria uma
  *    regra do servidor.
+ *
+ * Falhas: credencial recusada e rede sobem do proprio `/capabilities`, tipadas
+ * (`ErroDeDescoberta`) — o endpoint individual falharia igual. O 404 do
+ * endpoint individual, quando o agregado tambem nao existia, vira "instancia
+ * desatualizada" nomeando as duas rotas; os demais status do individual sobem
+ * como sempre, com a descricao do codigo da API que `erroDaApi` ja da.
  */
 export async function listaDeDescoberta(
 	ctx: ContextoDeRequisicao,
@@ -161,10 +218,12 @@ export async function listaDeDescoberta(
 	query?: IDataObject,
 ): Promise<IDataObject[]> {
 	const temRecorte = query !== undefined && Object.keys(query).length > 0;
+	let agregadoAusente = false;
 
 	if (!temRecorte) {
 		const impressao = await impressaoDoContexto(ctx);
 		const agregado = await buscarCapacidades(ctx, impressao);
+		agregadoAusente = agregado === null;
 
 		if (!blocoOmitido(agregado, bloco)) {
 			const doAgregado = agregado?.[bloco];
@@ -172,12 +231,17 @@ export async function listaDeDescoberta(
 		}
 	}
 
-	const resposta = await requisitar(ctx, {
-		metodo: 'GET',
-		caminho: BLOCOS_DO_AGREGADO[bloco],
-		query,
-	});
-	const corpo = resposta.corpo as IDataObject;
+	const caminho = BLOCOS_DO_AGREGADO[bloco];
+	let corpo: IDataObject;
+	try {
+		corpo = (await requisitar(ctx, { metodo: 'GET', caminho, query })).corpo as IDataObject;
+	} catch (erro) {
+		const falha = classificarFalhaDeDescoberta(erro, caminho);
+		if (falha.motivo !== 'endpoint_ausente') throw erro;
+		throw diagnosticarDescoberta(
+			agregadoAusente ? [endpointAusente('/capabilities'), falha] : [falha],
+		);
+	}
 	return Array.isArray(corpo?.dados) ? (corpo.dados as IDataObject[]) : [];
 }
 
