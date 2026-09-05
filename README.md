@@ -16,6 +16,9 @@ O pacote traz:
 O node é **stack-agnóstico quanto a dependências**: não tem nenhuma dependência
 de runtime. Só usa o que o próprio n8n já oferece.
 
+O que mudou em cada versão está em **[CHANGELOG.md](CHANGELOG.md)** — inclusive
+as limitações conhecidas, que vale ler antes de instalar.
+
 ---
 
 ## Sumário
@@ -633,41 +636,45 @@ dado antes de montar um fluxo maior.
 
 ## Publicação
 
-O pacote é publicado no npm por **OIDC Trusted Publishing**: o GitHub Actions
-troca um token OIDC de curta duração por uma credencial de publicação. **Não há
-`NPM_TOKEN` neste repositório**, e não deve haver — o segredo de longa duração é
-exatamente o que o trusted publishing elimina.
+O histórico de versões está em **[CHANGELOG.md](CHANGELOG.md)**. O processo
+completo de release — comandos, ordem e o que conferir antes — está em
+**[CONTRIBUTING.md](CONTRIBUTING.md)**. O resumo:
 
-O workflow `.github/workflows/publish.yml` roda em `release: published` (ou
-manualmente), com `permissions: { id-token: write, contents: read }`, e gera
-*provenance* automaticamente.
+```bash
+npm run release:ensaio -- minor   # mostra o que faria, sem escrever nada
+npm run release -- minor          # versão, CHANGELOG, tag, push, GitHub Release
+```
 
-### O que o dono do pacote precisa configurar em npmjs.com
+Criar o GitHub Release é o **gatilho**: `.github/workflows/publish.yml` roda em
+`release: published`, com `permissions: { id-token: write, contents: read }`, e
+publica no npm por **OIDC Trusted Publishing** — o runner troca um token OIDC de
+curta duração por uma credencial efêmera, e a *provenance* é gerada junto.
+Ninguém publica da própria máquina.
 
-Antes da primeira publicação — **uma vez**:
+### 🔴 A primeira publicação não pode usar OIDC
 
-1. Entre em [npmjs.com](https://www.npmjs.com) com a conta dona do pacote.
-2. Abra a página do pacote → **Settings**.
-   (Se o pacote ainda não existe no registro, a primeira publicação precisa ser
-   feita à mão, com `npm publish`, para criar o nome. O trusted publishing só
-   pode ser configurado num pacote que já existe.)
-3. Em **Trusted Publisher**, escolha **GitHub Actions** e preencha:
+O **Trusted Publishing só pode ser configurado num pacote que já existe no
+registro** — a página de Settings onde se cadastra o publicador confiável não
+existe enquanto ninguém publicou o nome. Então a `0.1.0` sai com autenticação
+normal (`npm login` + `npm publish`, ou um `NPM_TOKEN` temporário como secret), e
+**da `0.1.1` em diante o OIDC assume, sem token nenhum**.
 
-   | Campo             | Valor                    |
-   | ----------------- | ------------------------ |
-   | Organization/user | `fluxo`                  |
-   | Repository        | `n8n-nodes-fluxo-crm`    |
-   | Workflow filename | `publish.yml`            |
-   | Environment       | *(deixe vazio)*          |
+O passo a passo dos dois momentos está em
+[CONTRIBUTING.md → A primeira publicação é diferente](CONTRIBUTING.md#-a-primeira-publicação-é-diferente).
 
-4. Salve. Se a conta tiver 2FA exigido para publicação, marque a exceção para
-   *Trusted Publishers* — senão o CI é barrado pedindo OTP.
+Depois da primeira publicação, cadastre o publicador confiável em npmjs.com →
+página do pacote → **Settings** → **Trusted Publisher** → **GitHub Actions**:
 
-Feito isso, criar um release no GitHub publica a versão.
+| Campo                | Valor                 |
+| -------------------- | --------------------- |
+| Organization or user | `htnnn`               |
+| Repository           | `n8n-nodes-fluxo-crm` |
+| Workflow filename    | `publish.yml`         |
+| Environment          | *(deixe vazio)*       |
 
-> Ajuste `organization/repository` acima para o dono real do repositório. Os
-> campos precisam bater **exatamente** com o repositório que roda o workflow, ou
-> o npm recusa a troca do token.
+Os campos precisam bater **exatamente** com o repositório que roda o workflow, ou
+o npm recusa a troca do token. Se a conta exige 2FA para publicar, marque a
+exceção para *Trusted Publishers* — senão o CI é barrado pedindo OTP.
 
 ---
 
@@ -678,9 +685,12 @@ npm install
 npm run dev        # sobe um n8n com este node linkado
 npm run lint       # regras do n8n-node lint
 npm run typecheck
-npm test           # 184 testes
+npm test           # 209 testes
 npm run build
 ```
+
+Convenções de commit, formato do CHANGELOG e o processo de release estão em
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 O pacote **não tem dependências de runtime**, e o CI falha se alguma for
 adicionada — o node roda dentro do processo do n8n, e tudo que entra aqui entra
