@@ -6,12 +6,12 @@
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#credencial"
+				"url": "https://github.com/htnnn/n8n-nodes-fluxo-crm?tab=readme-ov-file#credencial"
 			}
 		],
 		"primaryDocumentation": [
 			{
-				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#gatilho-fluxo-crm-trigger"
+				"url": "https://github.com/htnnn/n8n-nodes-fluxo-crm?tab=readme-ov-file#gatilho-fluxo-crm-trigger"
 			}
 		]
 	}

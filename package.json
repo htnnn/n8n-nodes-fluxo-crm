@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"description": "Node comunitario do n8n para o Fluxo CRM: operacoes filtradas pelos escopos da chave de API",
 	"license": "MIT",
-	"homepage": "https://github.com/fluxo/n8n-nodes-fluxo-crm",
+	"homepage": "https://github.com/htnnn/n8n-nodes-fluxo-crm",
 	"keywords": [
 		"n8n-community-node-package",
 		"fluxo",
@@ -15,7 +15,7 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm.git"
+		"url": "https://github.com/htnnn/n8n-nodes-fluxo-crm.git"
 	},
 	"scripts": {
 		"build": "n8n-node build",
