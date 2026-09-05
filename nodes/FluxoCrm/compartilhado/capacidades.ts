@@ -7,7 +7,12 @@ import {
 	type ErroDeDescoberta,
 } from './descoberta';
 import { impressaoDaCredencial, resolverEscopos, type EstadoDeEscopos } from './escopos';
-import { NOME_DA_CREDENCIAL, requisitar, type ContextoDeRequisicao } from './transporte';
+import {
+	comoErroDoNode,
+	NOME_DA_CREDENCIAL,
+	requisitar,
+	type ContextoDeRequisicao,
+} from './transporte';
 
 /**
  * Ponte entre o resolvedor puro de escopos (`escopos.ts`) e o runtime do n8n.
@@ -237,7 +242,9 @@ export async function listaDeDescoberta(
 		corpo = (await requisitar(ctx, { metodo: 'GET', caminho, query })).corpo as IDataObject;
 	} catch (erro) {
 		const falha = classificarFalhaDeDescoberta(erro, caminho);
-		if (falha.motivo !== 'endpoint_ausente') throw erro;
+		// `requisitar` ja entrega um `NodeApiError` com a descricao do codigo da
+		// API; `comoErroDoNode` o devolve intacto e so embrulha o que escapou.
+		if (falha.motivo !== 'endpoint_ausente') throw comoErroDoNode(ctx, erro, `GET ${caminho}`);
 		throw diagnosticarDescoberta(
 			agregadoAusente ? [endpointAusente('/capabilities'), falha] : [falha],
 		);
