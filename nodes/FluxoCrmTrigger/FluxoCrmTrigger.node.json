@@ -2,7 +2,7 @@
 	"node": "n8n-nodes-fluxo-crm.fluxoCrmTrigger",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["Sales", "Productivity"],
+	"categories": ["Sales", "Productivity", "Communication"],
 	"resources": {
 		"credentialDocumentation": [
 			{

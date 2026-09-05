@@ -41,6 +41,19 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   403 e o dropdown abria vazio; agora cai para a lista estática dos 34, nos
   dois nodes, a partir de uma única tabela.
 
+### Alterado
+
+- **Os recursos de atendimento agora se chamam `Atendimento › Conversa`,
+  `Atendimento › Mensagem`, `Atendimento › Canal` e `Atendimento › Atendente`**
+  (antes: Conversa, Mensagem, Canal de Atendimento, Agente de Atendimento). Só
+  o rótulo muda — o valor que o workflow salvo referencia é o mesmo, e nenhum
+  node configurado precisa ser tocado. As operações desses recursos passam a
+  citar "atendimento" e, onde cabe, "WhatsApp", para que a busca do painel de
+  Actions as encontre. "Atendente", e não "Agente", porque o agente da v1 é
+  uma pessoa — o nome fica livre para o futuro Agente de IA.
+- Os dois nodes entram também na categoria **Communication** do n8n, além de
+  Sales e Productivity.
+
 ### Corrigido
 
 - **A descoberta diz o que falhou de verdade.** Quando `/v1/capabilities` e

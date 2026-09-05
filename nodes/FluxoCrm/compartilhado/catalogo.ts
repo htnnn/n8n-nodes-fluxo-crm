@@ -522,30 +522,39 @@ export const RECURSOS: RecursoDoCatalogo[] = [
 			},
 		],
 	},
+	// ── Atendimento ────────────────────────────────────────────────────
+	//
+	// Os quatro recursos levam "Atendimento" no ROTULO, e "atendimento" (e
+	// "WhatsApp", onde cabe) em `acao`/`descricao`, porque e por essas palavras
+	// que o usuario procura no painel de Actions — "Conversa" e "Mensagem"
+	// sozinhos nao eram achados. O `valor` NUNCA muda: workflows salvos o
+	// referenciam. O "agente" da v1 e uma pessoa; o rotulo diz "Atendente" para
+	// nao se confundir com o futuro Agente de IA.
 	{
 		valor: 'conversa',
-		nome: 'Conversa',
-		descricao: 'Atendimentos abertos nos canais de mensageria',
+		nome: 'Atendimento › Conversa',
+		descricao: 'Conversas de atendimento nos canais de mensageria (WhatsApp e demais)',
 		operacaoPadrao: 'listar',
 		operacoes: [
 			{
 				valor: 'atualizar',
 				nome: 'Atualizar',
-				acao: 'Atualizar o status ou o responsavel de uma conversa',
+				acao: 'Atualizar o status ou o responsavel de uma conversa de atendimento',
 				descricao: 'Trocar o status do atendimento ou quem responde por ele',
 				escopo: 'atendimento:escrever',
 			},
 			{
 				valor: 'listar',
 				nome: 'Listar',
-				acao: 'Listar conversas',
-				descricao: 'Listar atendimentos; esta lista pagina por data, nao por cursor',
+				acao: 'Listar conversas de atendimento',
+				descricao:
+					'Listar atendimentos (WhatsApp e demais canais); esta lista pagina por data, nao por cursor',
 				escopo: 'atendimento:ler',
 			},
 			{
 				valor: 'obter',
 				nome: 'Obter',
-				acao: 'Obter uma conversa',
+				acao: 'Obter uma conversa de atendimento',
 				descricao: 'Buscar um atendimento pelo identificador',
 				escopo: 'atendimento:ler',
 			},
@@ -553,28 +562,29 @@ export const RECURSOS: RecursoDoCatalogo[] = [
 	},
 	{
 		valor: 'mensagem',
-		nome: 'Mensagem',
-		descricao: 'Mensagens e notas internas dentro de uma conversa',
+		nome: 'Atendimento › Mensagem',
+		descricao: 'Mensagens e notas internas dentro de uma conversa de atendimento (WhatsApp e demais)',
 		operacaoPadrao: 'listar',
 		operacoes: [
 			{
 				valor: 'criarNotaInterna',
 				nome: 'Criar Nota Interna',
-				acao: 'Registrar uma nota interna na conversa',
+				acao: 'Registrar uma nota interna numa conversa de atendimento',
 				descricao: 'Gravar um recado que a equipe ve e o contato nao',
 				escopo: 'atendimento:escrever',
 			},
 			{
 				valor: 'enviar',
 				nome: 'Enviar',
-				acao: 'Enviar uma mensagem ao contato',
-				descricao: 'Mandar texto pelo canal do atendimento; midia ainda nao e aceita',
+				acao: 'Enviar uma mensagem de atendimento ao contato',
+				descricao:
+					'Mandar texto pelo canal do atendimento (WhatsApp e demais); midia ainda nao e aceita',
 				escopo: 'atendimento:escrever',
 			},
 			{
 				valor: 'listar',
 				nome: 'Listar',
-				acao: 'Listar as mensagens de uma conversa',
+				acao: 'Listar as mensagens de uma conversa de atendimento',
 				descricao: 'Ler ate 200 mensagens, da mais recente para a mais antiga',
 				escopo: 'atendimento:ler',
 			},
@@ -582,29 +592,29 @@ export const RECURSOS: RecursoDoCatalogo[] = [
 	},
 	{
 		valor: 'canalAtendimento',
-		nome: 'Canal de Atendimento',
-		descricao: 'Canais conectados ao atendimento da organizacao',
+		nome: 'Atendimento › Canal',
+		descricao: 'Canais conectados ao atendimento da organizacao (WhatsApp e demais)',
 		operacaoPadrao: 'listar',
 		operacoes: [
 			{
 				valor: 'listar',
 				nome: 'Listar',
-				acao: 'Listar canais de atendimento',
-				descricao: 'Listar os canais conectados e o status de cada um',
+				acao: 'Listar os canais de atendimento',
+				descricao: 'Listar os canais conectados ao atendimento (WhatsApp e demais) e o status de cada um',
 				escopo: 'atendimento:ler',
 			},
 		],
 	},
 	{
 		valor: 'agenteAtendimento',
-		nome: 'Agente de Atendimento',
+		nome: 'Atendimento › Atendente',
 		descricao: 'Pessoas habilitadas a responder atendimentos',
 		operacaoPadrao: 'listar',
 		operacoes: [
 			{
 				valor: 'listar',
 				nome: 'Listar',
-				acao: 'Listar agentes de atendimento',
+				acao: 'Listar os atendentes do atendimento',
 				descricao: 'Listar quem pode assumir um atendimento',
 				escopo: 'atendimento:ler',
 			},

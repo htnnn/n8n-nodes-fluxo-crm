@@ -189,18 +189,18 @@ nada. Nenhum cadeado aparece, e o servidor decide a cada chamada.
 
 | Recurso                 | Para que serve                                                     | Operações |
 | ----------------------- | ------------------------------------------------------------------ | --------- |
-| **Agente de Atendimento** | Pessoas habilitadas a responder atendimentos                     | 1         |
 | **Arquivo**             | Vínculos entre uma entidade e um arquivo já hospedado               | 4         |
+| **Atendimento › Atendente** | Pessoas habilitadas a responder atendimentos                    | 1         |
+| **Atendimento › Canal** | Canais conectados ao atendimento (WhatsApp e demais)                | 1         |
+| **Atendimento › Conversa** | Conversas de atendimento nos canais de mensageria                | 3         |
+| **Atendimento › Mensagem** | Mensagens e notas internas dentro de uma conversa de atendimento | 3         |
 | **Atividade**           | Tarefas, ligações e reuniões ligadas a uma entidade                 | 6         |
-| **Canal de Atendimento** | Canais conectados ao atendimento da organização                    | 1         |
 | **Contato**             | Fichas de pessoas do CRM                                            | 8         |
-| **Conversa**            | Atendimentos abertos nos canais de mensageria                       | 3         |
 | **Empresa**             | Fichas de organizações clientes e fornecedoras                      | 8         |
 | **Etiqueta**            | Catálogo de etiquetas e os vínculos com cada registro               | 4         |
 | **Interação**           | Reuniões, ligações, follow-ups e e-mails registrados                | 5         |
 | **Lead**                | Contatos ainda não qualificados, antes de virarem ficha             | 6         |
 | **Lote**                | Gravação de até 200 fichas numa requisição só                       | 3         |
-| **Mensagem**            | Mensagens e notas internas dentro de uma conversa                   | 3         |
 | **Módulo**              | Módulos da organização e o dicionário de campos de cada um          | 3         |
 | **Negócio**             | Oportunidades comerciais dentro de um funil                         | 9         |
 | **Nota**                | Anotações de texto presas a um registro                             | 4         |

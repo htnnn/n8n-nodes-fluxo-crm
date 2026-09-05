@@ -13,6 +13,9 @@ import {
 	RECURSOS,
 } from '../nodes/FluxoCrm/compartilhado/catalogo';
 import type { EstadoDeEscopos } from '../nodes/FluxoCrm/compartilhado/escopos';
+import codexDoNode from '../nodes/FluxoCrm/FluxoCrm.node.json';
+import { RECURSOS_SONDAVEIS } from '../nodes/FluxoCrmTrigger/catalogo';
+import codexDoGatilho from '../nodes/FluxoCrmTrigger/FluxoCrmTrigger.node.json';
 
 const contato = encontrarRecurso('contato')!;
 const negocio = encontrarRecurso('negocio')!;
@@ -84,6 +87,63 @@ describe('catalogo', () => {
 
 		const recursos = opcoesEstaticasDeRecurso().map((opcao) => opcao.name);
 		expect(recursos).toEqual([...recursos].sort((a, b) => a.localeCompare(b, 'pt-BR')));
+	});
+});
+
+describe('achabilidade do Atendimento', () => {
+	/**
+	 * O `valor` e o que o workflow salvo referencia: mudar um deles quebraria
+	 * todo node ja configurado, com o generico `The value "x" is not supported!`.
+	 * O `nome` e so o rotulo — e e nele que "Atendimento" precisa estar.
+	 */
+	const ROTULOS: Record<string, string> = {
+		conversa: 'Atendimento › Conversa',
+		mensagem: 'Atendimento › Mensagem',
+		canalAtendimento: 'Atendimento › Canal',
+		agenteAtendimento: 'Atendimento › Atendente',
+	};
+
+	it('os quatro recursos mantem o valor e levam "Atendimento" no rotulo', () => {
+		for (const [valor, nome] of Object.entries(ROTULOS)) {
+			const recurso = encontrarRecurso(valor);
+			expect(recurso, valor).toBeDefined();
+			expect(recurso!.valor).toBe(valor);
+			expect(recurso!.nome).toBe(nome);
+		}
+		// Todos os recursos, e nao so estes, precisam estar la para o dropdown.
+		expect(opcoesEstaticasDeRecurso().map((opcao) => opcao.value)).toEqual(
+			expect.arrayContaining(Object.keys(ROTULOS)),
+		);
+	});
+
+	it('toda operacao desses recursos e achavel por "atendimento" no painel de Actions', () => {
+		// O painel busca no `action` e na descricao; o nome do recurso nao entra.
+		for (const valor of Object.keys(ROTULOS)) {
+			for (const operacao of encontrarRecurso(valor)!.operacoes) {
+				const texto = `${operacao.acao} ${operacao.descricao}`.toLowerCase();
+				expect(texto, `${valor} › ${operacao.valor}`).toContain('atendimento');
+			}
+		}
+	});
+
+	it('conversa, mensagem e canal citam WhatsApp, que e como o usuario procura', () => {
+		for (const valor of ['conversa', 'mensagem', 'canalAtendimento']) {
+			const recurso = encontrarRecurso(valor)!;
+			const textos = [recurso.descricao, ...recurso.operacoes.flatMap((op) => [op.acao, op.descricao])];
+			expect(textos.some((texto) => texto.includes('WhatsApp')), valor).toBe(true);
+		}
+	});
+
+	it('o gatilho usa os mesmos rotulos para conversa e mensagem', () => {
+		const doGatilho = new Map(RECURSOS_SONDAVEIS.map((recurso) => [recurso.valor, recurso.nome]));
+		expect(doGatilho.get('conversa')).toBe(ROTULOS.conversa);
+		expect(doGatilho.get('mensagem')).toBe(ROTULOS.mensagem);
+	});
+
+	it('os dois nodes entram na categoria Communication, alem das que ja tinham', () => {
+		for (const codex of [codexDoNode, codexDoGatilho]) {
+			expect(codex.categories).toEqual(['Sales', 'Productivity', 'Communication']);
+		}
 	});
 });
 
