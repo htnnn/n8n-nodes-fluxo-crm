@@ -165,8 +165,16 @@ describe('o CHANGELOG.md deste repositorio', () => {
 		const pacote = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 		const notas = notasDaVersao(CHANGELOG_REAL, pacote.version);
 
-		expect(notas.length).toBeGreaterThan(200);
-		expect(notas).toContain('Limitações conhecidas');
+		// Uma versao de patch pode ter so "Corrigido" — a 0.1.1 e assim. O que
+		// toda versao precisa e de ao menos uma categoria do Keep a Changelog e
+		// de texto que diga algo a quem instala.
+		expect(notas.length).toBeGreaterThan(100);
+		expect(notas).toMatch(
+			/^### (Adicionado|Alterado|Descontinuado|Removido|Corrigido|Segurança|Limitações conhecidas)$/m,
+		);
+		// "Limitações conhecidas" e um contrato do DOCUMENTO, nao de cada versao:
+		// as restricoes do servidor precisam estar registradas em algum lugar.
+		expect(CHANGELOG_REAL).toContain('### Limitações conhecidas');
 	});
 
 	it('e promovivel — o rodape de links tem a forma que o script espera', () => {
