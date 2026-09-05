@@ -53,6 +53,14 @@ describe('coerencia entre a arvore de parametros e o catalogo', () => {
 		}
 	});
 
+	it('todo recurso do catalogo tem o seu proprio parametro `operation`', () => {
+		const parametros = propriedades.filter((propriedade) => propriedade.name === 'operation');
+		const cobertos = parametros.map(
+			(parametro) => (parametro.displayOptions?.show?.resource ?? [])[0] as string,
+		);
+		expect([...cobertos].sort()).toEqual(RECURSOS.map((recurso) => recurso.valor).sort());
+	});
+
 	it('o `default` de cada parametro `operation` e uma operacao real do recurso', () => {
 		const parametros = propriedades.filter((propriedade) => propriedade.name === 'operation');
 		expect(parametros).toHaveLength(RECURSOS.length);
@@ -73,8 +81,16 @@ describe('metodos referenciados pela interface existem na classe', () => {
 	const registrados = {
 		loadOptions: Object.keys(node.methods.loadOptions),
 		listSearch: Object.keys(node.methods.listSearch),
+		resourceMapping: Object.keys(node.methods.resourceMapping),
 		credentialTest: Object.keys(node.methods.credentialTest),
 	};
+
+	/** Os metodos de `resourceMapper` citados na arvore de parametros. */
+	const mapeadoresCitados = new Set(
+		arvore
+			.map((propriedade) => propriedade.typeOptions?.resourceMapper?.resourceMapperMethod)
+			.filter((metodo): metodo is string => typeof metodo === 'string'),
+	);
 
 	it('todo loadOptionsMethod citado esta registrado', () => {
 		for (const propriedade of arvore) {
@@ -91,6 +107,31 @@ describe('metodos referenciados pela interface existem na classe', () => {
 				if (metodo === undefined) continue;
 				expect(registrados.listSearch, `listSearch ausente: ${metodo}`).toContain(metodo);
 			}
+		}
+	});
+
+	it('todo resourceMapperMethod citado esta registrado', () => {
+		// O mapper e a unica forma de o node saber a obrigatoriedade real dos
+		// campos daquela organizacao. Um metodo citado e nao registrado nao falha
+		// no lint nem no build: falha na tela do usuario, com o painel vazio.
+		for (const metodo of mapeadoresCitados) {
+			expect(registrados.resourceMapping, `resourceMapping ausente: ${metodo}`).toContain(metodo);
+		}
+	});
+
+	it('nao ha resourceMapping registrado sem uso na interface', () => {
+		for (const metodo of registrados.resourceMapping) {
+			expect(mapeadoresCitados.has(metodo), `resourceMapping sem uso: ${metodo}`).toBe(true);
+		}
+	});
+
+	it('todo `resourceMapper` declara o default que a interface do n8n espera', () => {
+		for (const propriedade of arvore) {
+			if (propriedade.type !== 'resourceMapper') continue;
+			expect(propriedade.default, `default errado em ${propriedade.name}`).toEqual({
+				mappingMode: 'defineBelow',
+				value: null,
+			});
 		}
 	});
 
