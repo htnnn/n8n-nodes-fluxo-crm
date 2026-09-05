@@ -12,6 +12,8 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+## [0.1.1] - 2026-09-05
+
 ### Corrigido
 
 - O ícone dos dois nodes e da credencial agora é o logotipo oficial do Fluxo
@@ -144,5 +146,6 @@ de gatilho resolve o seu caso.
   verificação oficial da n8n, porque a interface é em português e o processo de
   verificação exige inglês — então ele não aparece no n8n Cloud.
 
-[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.0...HEAD
+[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/releases/tag/v0.1.0
