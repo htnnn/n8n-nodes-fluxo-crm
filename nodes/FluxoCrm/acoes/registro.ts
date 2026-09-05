@@ -2,11 +2,13 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosDeCampo, filtrosSimples } from '../compartilhado/filtros';
-import { valoresDoMapeador } from '../compartilhado/mapeador';
+import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
+	aplicarNoTopo,
 	cabecalhoDeIdempotencia,
 	corpoDaColecao,
+	envelopeDeEscrita,
 	exigirUuid,
 	itemDeSaida as item,
 	objeto,
@@ -135,11 +137,20 @@ export async function executarRegistro(
 		}
 
 		case 'criar': {
-			const valores = valoresDoMapeador(ctx.getNodeParameter('valores', i, {})) ?? {};
-			recusarAtalhoDeDono(ctx, valores, i);
+			const mapeado = valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
+			if (mapeado !== undefined) recusarAtalhoDeDono(ctx, mapeado, i);
+			const envelope = envelopeDeEscrita(ctx, i, mapeado, {
+				aceitos: sistemaAceito('registro', 'criar'),
+			});
 
 			// O servidor exige a chave `valores`, mesmo que vazia.
-			const corpo: IDataObject = { valores, ...corpoDaColecao(ctx, 'additionalFields', i) };
+			const corpo: IDataObject = {
+				valores: envelope.blob ?? {},
+				...corpoDaColecao(ctx, 'additionalFields', i),
+			};
+			// Dono e equipe vindos do mapeador vao para o topo do corpo, que e onde
+			// a rota os le — dentro de `valores` virariam campo personalizado.
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
 			const resposta = await requisitar(ctx, {
@@ -164,15 +175,21 @@ export async function executarRegistro(
 
 		case 'atualizar': {
 			const id = exigirUuid(ctx, ctx.getNodeParameter('registroId', i), 'registro', i);
-			const valores = valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
-			if (valores !== undefined) recusarAtalhoDeDono(ctx, valores, i);
+			const mapeado = valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
+			if (mapeado !== undefined) recusarAtalhoDeDono(ctx, mapeado, i);
+			const envelope = envelopeDeEscrita(ctx, i, mapeado, {
+				aceitos: sistemaAceito('registro', 'atualizar'),
+				orientacao:
+					'Este PATCH aceita a equipe no topo do corpo, mas nao o dono — trocar de dono e outra operacao. Tire "Dono" do mapeador de campos.',
+			});
 
 			const equipe = ctx.getNodeParameter('equipe_id', i, '') as string;
 
 			const corpo: IDataObject = {};
 			// `valores` faz MERGE no servidor: campo ausente e preservado.
-			if (valores !== undefined) corpo.valores = valores;
+			if (envelope.blob !== undefined) corpo.valores = envelope.blob;
 			if (equipe !== '') corpo.equipe_id = exigirUuid(ctx, equipe, 'equipe', i);
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			if (Object.keys(corpo).length === 0) {
 				throw new NodeOperationError(ctx.getNode(), 'Nenhum campo para atualizar', {
@@ -181,6 +198,11 @@ export async function executarRegistro(
 					itemIndex: i,
 				});
 			}
+
+			// O schema do PATCH exige a chave `valores` mesmo quando so a equipe
+			// muda (`rotas/registros.ts`, `atualizarSchema`). `{}` mescla nada e
+			// preserva tudo.
+			if (corpo.valores === undefined) corpo.valores = {};
 
 			const resposta = await requisitar(ctx, {
 				metodo: 'PATCH',

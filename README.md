@@ -219,6 +219,15 @@ da tela do CRM e o node extrai o identificador).
 Atividade, Negócio e Registro trazem um mapeador que lê os campos reais da sua
 org — com o `obrigatório` real de cada um, em tempo de edição.
 
+**Campos de sistema entram no mesmo mapeador, marcados `(sistema)`.** Quando a
+API devolve o dicionário com as flags `sistema` e `somente_leitura`, o mapeador
+oferece também o responsável (Contato, Empresa), o dono e a equipe (Registro) e
+o dono (Negócio) — só nas operações em que a rota os aceita — e os envia no
+**primeiro nível do corpo**, nunca dentro de `valores`/`dados`. Criado em/por e
+atualizado em/por são somente leitura: aparecem em `Módulo › Listar Campos` e
+na saída, mas a escrita os recusa antes de chamar a API. Numa instância com API
+anterior às flags, nada muda.
+
 **`Criar ou Atualizar` existe em Contato, Empresa, Lead, Negócio e Pipeline.**
 Casa por um campo de índice e cria quando não encontra.
 

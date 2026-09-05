@@ -186,6 +186,11 @@ export async function listaDeDescoberta(
  *
  * Nao passa pelo agregado: `/capabilities` nao carrega campo nenhum, e nem
  * poderia — o dicionario e por modulo e a organizacao pode ter dezenas.
+ *
+ * A resposta traz os campos do layout e, depois deles, os campos de SISTEMA
+ * (`sistema: true`: responsavel, equipe, criado em/por, atualizado em/por),
+ * com `somente_leitura: true` nos que o servidor preenche. Instancia com API
+ * anterior nao manda as duas flags — quem consome trata ausencia como `false`.
  */
 export async function camposDoModulo(
 	ctx: ContextoDeRequisicao,

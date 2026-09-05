@@ -2,8 +2,14 @@ import type { IDataObject } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 
 import {
+	CAMPOS_DE_SISTEMA_GRAVAVEIS,
+	CAMPOS_DE_SISTEMA_SOMENTE_LEITURA,
 	camposParaMapeador,
 	escolhasDoCampo,
+	separarCamposDeSistema,
+	SISTEMA_ACEITO_NA_ESCRITA,
+	sistemaAceito,
+	sistemaAceitoNoRecurso,
 	valoresDoMapeador,
 } from '../nodes/FluxoCrm/compartilhado/mapeador';
 
@@ -96,6 +102,132 @@ describe('traducao do dicionario para o mapper', () => {
 		// nao faz.
 		for (const item of camposParaMapeador([campo({ slug: 'email' }), campo({ slug: 'apelido' })])) {
 			expect(item).toMatchObject({ canBeUsedToMatch: false, defaultMatch: false });
+		}
+	});
+});
+
+/**
+ * Os campos de SISTEMA do dicionario (`api-publica/campos-de-sistema.ts`).
+ *
+ * `GET /modulos/{slug}/campos` passou a devolver responsavel, equipe e os
+ * quatro de auditoria junto do layout, com `sistema: true`. A regra que estes
+ * testes travam: somente leitura nunca entra num mapper de escrita; o gravavel
+ * entra so onde a rota o aceita, e viaja no topo do corpo; e a flag ausente —
+ * instancia com API anterior — se comporta exatamente como antes.
+ */
+function deSistema(slug: string, nome: string, somenteLeitura: boolean): IDataObject {
+	return campo({
+		id: null,
+		slug,
+		nome,
+		tipo: somenteLeitura ? 'data' : 'usuario',
+		sistema: true,
+		somente_leitura: somenteLeitura,
+	});
+}
+
+const DICIONARIO_DE_REGISTROS: IDataObject[] = [
+	campo({ slug: 'titulo', nome: 'Titulo', sistema: false, somente_leitura: false }),
+	deSistema('dono_id', 'Responsavel', false),
+	deSistema('equipe_id', 'Equipe', false),
+	deSistema('criado_em', 'Criado em', true),
+	deSistema('criado_por', 'Criado por', true),
+	deSistema('atualizado_em', 'Atualizado em', true),
+	deSistema('atualizado_por', 'Atualizado por', true),
+];
+
+describe('campos de sistema no mapper de escrita', () => {
+	it('somente leitura NUNCA entra: sao preenchidos pelo servidor', () => {
+		const ids = camposParaMapeador(DICIONARIO_DE_REGISTROS, {
+			deSistemaAceitos: ['dono_id', 'equipe_id'],
+		}).map((item) => item.id);
+
+		for (const slug of CAMPOS_DE_SISTEMA_SOMENTE_LEITURA) expect(ids).not.toContain(slug);
+	});
+
+	it('o gravavel entra so quando a operacao o aceita, e marcado como de sistema', () => {
+		const criar = camposParaMapeador(DICIONARIO_DE_REGISTROS, {
+			deSistemaAceitos: ['dono_id', 'equipe_id'],
+		});
+		expect(criar.map((item) => item.id)).toEqual(['titulo', 'dono_id', 'equipe_id']);
+		expect(criar[1].displayName).toBe('Responsavel (sistema)');
+		expect(criar[0].displayName).toBe('Titulo');
+
+		const atualizar = camposParaMapeador(DICIONARIO_DE_REGISTROS, {
+			deSistemaAceitos: ['equipe_id'],
+		});
+		expect(atualizar.map((item) => item.id)).toEqual(['titulo', 'equipe_id']);
+
+		// Sem lista, nenhum campo de sistema: e o mapper de uma rota que nao
+		// aceita nenhum (atividades).
+		expect(camposParaMapeador(DICIONARIO_DE_REGISTROS).map((item) => item.id)).toEqual(['titulo']);
+	});
+
+	it('FLAG AUSENTE = comportamento antigo: tudo entra, como numa API anterior', () => {
+		// Instancia sem as flags nunca devolve campo de sistema; mas um campo do
+		// layout sem `sistema`/`somente_leitura` precisa continuar entrando.
+		const antigos = [campo({ slug: 'apelido' }), campo({ slug: 'cnpj', obrigatorio: true })];
+		const ids = camposParaMapeador(antigos).map((item) => item.id);
+		expect(ids).toEqual(['apelido', 'cnpj']);
+		expect(camposParaMapeador(antigos)[0].displayName).toBe('Campo');
+	});
+
+	it('separa o objeto do mapeador em layout, sistema e somente leitura', () => {
+		expect(
+			separarCamposDeSistema({
+				titulo: 'Casa',
+				dono_id: 'u-1',
+				equipe_id: null,
+				criado_em: '2026-01-01',
+				responsavel_id: 'u-2',
+			}),
+		).toEqual({
+			doLayout: { titulo: 'Casa' },
+			deSistema: { dono_id: 'u-1', equipe_id: null, responsavel_id: 'u-2' },
+			somenteLeitura: ['criado_em'],
+		});
+	});
+
+	it('as listas fechadas espelham `camposDeSistemaDoModulo` do servidor', () => {
+		// `campos-de-sistema.ts`: responsavel (`dono_id` ou `responsavel_id`) e
+		// `equipe_id` gravaveis; criado/atualizado em/por somente leitura.
+		expect([...CAMPOS_DE_SISTEMA_GRAVAVEIS].sort()).toEqual(['dono_id', 'equipe_id', 'responsavel_id']);
+		expect([...CAMPOS_DE_SISTEMA_SOMENTE_LEITURA].sort()).toEqual([
+			'atualizado_em',
+			'atualizado_por',
+			'criado_em',
+			'criado_por',
+		]);
+	});
+
+	it('a tabela de envelope segue os schemas de escrita, rota a rota', () => {
+		// registros.ts: criar aceita dono e equipe; atualizar so equipe.
+		expect(sistemaAceito('registro', 'criar')).toEqual(['dono_id', 'equipe_id']);
+		expect(sistemaAceito('registro', 'atualizar')).toEqual(['equipe_id']);
+		// negocios.ts: dono em criar e upsert; nada em atualizar; equipe nunca.
+		expect(sistemaAceito('negocio', 'criar')).toEqual(['dono_id']);
+		expect(sistemaAceito('negocio', 'criarOuAtualizar')).toEqual(['dono_id']);
+		expect(sistemaAceito('negocio', 'atualizar')).toEqual([]);
+		// contatos.ts / empresas.ts: responsavel nas tres.
+		for (const recurso of ['contato', 'empresa']) {
+			for (const operacao of ['criar', 'atualizar', 'criarOuAtualizar']) {
+				expect(sistemaAceito(recurso, operacao)).toEqual(['responsavel_id']);
+			}
+		}
+		// atividades.ts e .strict() e so conhece usuario_id.
+		expect(sistemaAceito('atividade', 'criar')).toEqual([]);
+		expect(sistemaAceito('atividade', 'atualizar')).toEqual([]);
+		// Recurso ou operacao fora da tabela: nada e aceito (falha fechada).
+		expect(sistemaAceito('lead', 'criar')).toEqual([]);
+		expect(sistemaAceito('registro', 'excluir')).toEqual([]);
+
+		expect(sistemaAceitoNoRecurso('registro')).toEqual(['dono_id', 'equipe_id']);
+		expect(sistemaAceitoNoRecurso('atividade')).toEqual([]);
+		// Toda entrada da tabela so cita campos que existem na lista de gravaveis.
+		for (const porOperacao of Object.values(SISTEMA_ACEITO_NA_ESCRITA)) {
+			for (const aceitos of Object.values(porOperacao)) {
+				for (const slug of aceitos) expect(CAMPOS_DE_SISTEMA_GRAVAVEIS).toContain(slug);
+			}
 		}
 	});
 });

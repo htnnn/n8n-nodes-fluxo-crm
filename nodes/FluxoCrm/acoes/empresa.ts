@@ -2,16 +2,19 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosSimples } from '../compartilhado/filtros';
-import { valoresDoMapeador } from '../compartilhado/mapeador';
+import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista, requisitarListaSimples } from '../compartilhado/transporte';
 import {
+	aplicarNoTopo,
 	cabecalhoDeIdempotencia,
 	corpoDaColecao,
+	envelopeDeEscrita,
 	idDoLocalizador,
 	itemDeSaida as item,
 	objeto,
 	propagarAvisos,
 	texto,
+	type EnvelopeDeEscrita,
 } from '../compartilhado/utilitarios';
 
 /**
@@ -30,9 +33,18 @@ function corpoDaEmpresa(ctx: IExecuteFunctions, i: number, nomeDaColecao: string
 	return corpoDaColecao(ctx, nomeDaColecao, i);
 }
 
-/** Le o `resourceMapper` de campos personalizados. */
-function dadosDaEmpresa(ctx: IExecuteFunctions, i: number): IDataObject | undefined {
-	return valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
+/**
+ * Le o `resourceMapper` de campos personalizados.
+ *
+ * O responsavel vem do dicionario como campo de SISTEMA e vai para o topo do
+ * corpo (`envelope.topo`), nao para `dados` — que e `.strict()` por fora e
+ * livre por dentro, entao um `responsavel_id` dentro do blob seria gravado
+ * como campo personalizado, em silencio.
+ */
+function dadosDaEmpresa(ctx: IExecuteFunctions, i: number, operacao: string): EnvelopeDeEscrita {
+	return envelopeDeEscrita(ctx, i, valoresDoMapeador(ctx.getNodeParameter('dados', i, {})), {
+		aceitos: sistemaAceito('empresa', operacao),
+	});
 }
 
 export async function executarEmpresa(
@@ -98,8 +110,9 @@ export async function executarEmpresa(
 				});
 			}
 
-			const dados = dadosDaEmpresa(ctx, i);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = dadosDaEmpresa(ctx, i, 'criar');
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
 			const resposta = await requisitar(ctx, {
@@ -115,8 +128,9 @@ export async function executarEmpresa(
 			const id = idDoLocalizador(ctx, 'empresaId', 'empresa', i);
 			const corpo = corpoDaEmpresa(ctx, i, 'updateFields');
 
-			const dados = dadosDaEmpresa(ctx, i);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = dadosDaEmpresa(ctx, i, 'atualizar');
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			if (Object.keys(corpo).length === 0) {
 				throw new NodeOperationError(ctx.getNode(), 'Nenhum campo para atualizar', {
@@ -165,8 +179,9 @@ export async function executarEmpresa(
 				);
 			}
 
-			const dados = dadosDaEmpresa(ctx, i);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = dadosDaEmpresa(ctx, i, 'criarOuAtualizar');
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
 			const resposta = await requisitar(ctx, {

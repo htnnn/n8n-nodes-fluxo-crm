@@ -331,6 +331,9 @@ export const descricaoDoNegocio: INodeProperties[] = [
 			show: { resource: [RECURSO], operation: ['criar', 'atualizar', 'criarOuAtualizar'] },
 		},
 		typeOptions: {
+			// O campo de sistema oferecido muda por operacao: criar e upsert aceitam
+			// o dono no topo do corpo; atualizar nao aceita nenhum.
+			loadOptionsDependsOn: ['operation'],
 			resourceMapper: {
 				resourceMapperMethod: 'mapearCamposDeNegocio',
 				mode: 'add',
@@ -340,7 +343,7 @@ export const descricaoDoNegocio: INodeProperties[] = [
 			},
 		},
 		description:
-			'Campos do modulo de negocios, lidos do layout desta organizacao. Slug desconhecido e descartado em silencio pelo servidor.',
+			'Campos do modulo de negocios, lidos do layout desta organizacao, mais o dono como campo de sistema onde a operacao o aceita. Slug desconhecido e descartado em silencio pelo servidor.',
 	},
 
 	{

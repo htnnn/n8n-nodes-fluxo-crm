@@ -2,17 +2,35 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosSimples } from '../compartilhado/filtros';
-import { valoresDoMapeador } from '../compartilhado/mapeador';
+import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
 	cabecalhoDeIdempotencia,
 	corpoDaColecao,
+	envelopeDeEscrita,
 	exigirUuid,
 	itemDeSaida as item,
 	objeto,
 	paraUtc,
 	texto,
 } from '../compartilhado/utilitarios';
+
+/**
+ * O dicionario de `tarefas` anuncia `dono_id` e `equipe_id` como campos de
+ * sistema, mas `POST/PATCH /atividades` sao `.strict()` e nao os aceitam: o
+ * responsavel da atividade e `usuario_id`. Chegando pelo mapeador (so por
+ * expressao — o mapper nao os oferece), a execucao recusa com este motivo.
+ */
+const ORIENTACAO_DE_SISTEMA =
+	'A rota de atividades nao recebe dono nem equipe: o responsavel e o campo usuario_id, em Campos Adicionais. Tire o campo do mapeador.';
+
+/** Le o `resourceMapper` de campos personalizados, sem campo de sistema. */
+function dadosDaAtividade(ctx: IExecuteFunctions, i: number, operacao: string): IDataObject | undefined {
+	return envelopeDeEscrita(ctx, i, valoresDoMapeador(ctx.getNodeParameter('dados', i, {})), {
+		aceitos: sistemaAceito('atividade', operacao),
+		orientacao: ORIENTACAO_DE_SISTEMA,
+	}).blob;
+}
 
 /**
  * Atividades — tarefas, ligacoes e reunioes presas a uma entidade do CRM.
@@ -86,7 +104,7 @@ export async function executarAtividade(
 				});
 			}
 
-			const dados = valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
+			const dados = dadosDaAtividade(ctx, i, 'criar');
 			if (dados !== undefined) corpo.dados = dados;
 
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
@@ -103,7 +121,7 @@ export async function executarAtividade(
 			const id = exigirUuid(ctx, ctx.getNodeParameter('atividadeId', i), 'atividade', i);
 			const corpo = corpoDaAtividade(ctx, i, 'updateFields');
 
-			const dados = valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
+			const dados = dadosDaAtividade(ctx, i, 'atualizar');
 			if (dados !== undefined) corpo.dados = dados;
 
 			if (Object.keys(corpo).length === 0) {

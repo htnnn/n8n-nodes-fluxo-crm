@@ -306,8 +306,18 @@ export async function carregarCamposDeNegocio(
 	return opcoesDeCampos(await camposDoModulo(this, 'negocios'));
 }
 
+/**
+ * Os campos de um modulo para o filtro `campo:{slug}[operador]`.
+ *
+ * Campo de SISTEMA fica de fora: o servidor confere o slug do filtro contra o
+ * LAYOUT do modulo (`api-publica/filtros-registro.ts`, `validarCamposDoModulo`)
+ * e devolve 422 para `campo:dono_id` ou `campo:criado_em`. Dono e datas ja tem
+ * filtro proprio (`dono_id`, `criado_apos`, `atualizado_apos`) na mesma lista.
+ * Flag ausente (API anterior as flags) deixa o campo entrar, como sempre.
+ */
 function opcoesDeCampos(campos: IDataObject[]): INodePropertyOptions[] {
 	return campos
+		.filter((campo) => campo.sistema !== true)
 		.map((campo) => ({
 			name: `${texto(campo.nome)} (${texto(campo.tipo)})`,
 			value: texto(campo.slug),

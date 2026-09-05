@@ -18,7 +18,13 @@ import type {
  *
  * Fonte: `GET /modulos/{slug}/campos`, que devolve por campo
  * `{id, slug, nome, tipo, obrigatorio, unico, is_primario, valor_padrao,
- *   opcoes, validacoes, secao, ordem}`.
+ *   opcoes, validacoes, secao, ordem, sistema, somente_leitura}`.
+ *
+ * As duas ultimas chaves chegaram com os campos de SISTEMA
+ * (`api-publica/campos-de-sistema.ts`): responsavel, equipe, criado em/por e
+ * atualizado em/por passaram a vir no dicionario junto do layout, com
+ * `sistema: true`. Instancia com API anterior nao manda nenhuma das duas —
+ * flag ausente vale `false`, que e o comportamento que sempre existiu.
  *
  * Modulo puro: nao conhece o n8n em runtime, so os tipos.
  */
@@ -65,6 +71,139 @@ const TIPOS_DERIVADOS = new Set(['formula', 'agregacao']);
 /** Campos que o servidor preenche sozinho e o usuario nao deve editar. */
 const TIPOS_SOMENTE_LEITURA = new Set(['autonumerico']);
 
+// ── Campos de sistema ────────────────────────────────────────────────
+//
+// O dicionario anuncia os campos de sistema com o NOME PUBLICO que a v1 aceita
+// e devolve (`campos-de-sistema.ts`, `camposDeSistemaDoModulo`): `dono_id` e
+// `equipe_id` na superficie de registros, `responsavel_id` em Contatos e
+// Empresas, e os quatro de auditoria em todos. Eles viajam no PRIMEIRO NIVEL do
+// corpo — nunca dentro de `valores`/`dados`, que e onde o mapeador joga tudo o
+// que vem do layout. O que esta abaixo e a regra que separa os dois.
+//
+// As listas sao fechadas e copiadas do servidor porque na EXECUCAO o node so
+// tem o objeto plano do mapeador, sem as flags. Nao ha risco de colisao com
+// campo do layout: o gerador de slug do dicionario troca tudo que nao e
+// alfanumerico por hifen ("Dono id" vira `dono-id`), entao um slug com
+// underscore nunca nasce do layout.
+
+/** Campos de sistema que a escrita aceita, no primeiro nivel do corpo. */
+export const CAMPOS_DE_SISTEMA_GRAVAVEIS: readonly string[] = [
+	'dono_id',
+	'responsavel_id',
+	'equipe_id',
+];
+
+/**
+ * Campos de sistema preenchidos pelo servidor (`somente_leitura: true`).
+ * Servem para leitura e mapeamento de saida, nunca para escrita.
+ */
+export const CAMPOS_DE_SISTEMA_SOMENTE_LEITURA: readonly string[] = [
+	'criado_em',
+	'criado_por',
+	'atualizado_em',
+	'atualizado_por',
+];
+
+/**
+ * Quais campos de sistema cada rota de escrita aceita no primeiro nivel.
+ *
+ * Conferido schema a schema em `apps/api/src/api-publica/rotas/` do branch
+ * `integracao/pilha-na-main`:
+ *
+ * - `contatos.ts:130` — `responsavel_id` no schema base, herdado por
+ *   `atualizarSchema` (`.partial()`, l.183) e `upsertSchema` (`.extend()`, l.185);
+ * - `empresas.ts:36` — idem, com os derivados nas l.43-44;
+ * - `registros.ts:70-76` — criar aceita `dono_id` e `equipe_id`; `79-84` —
+ *   atualizar aceita SO `equipe_id`;
+ * - `negocios.ts:172-191` — criar aceita `dono_id`; `197-209` — atualizar nao
+ *   aceita nenhum ("dono e pipeline mudam por endpoints proprios");
+ *   `400-429` — upsert aceita `dono_id`. Nenhuma das tres aceita `equipe_id`;
+ * - `atividades.ts:40-68` — nenhum: o responsavel da atividade e `usuario_id`,
+ *   e a rota e `.strict()`. O dicionario de `tarefas` anuncia `dono_id` e
+ *   `equipe_id` mesmo assim, por isso a lista aqui e por ROTA e nao por modulo.
+ *
+ * Todos os schemas sao `.strict()`: mandar um campo fora desta lista no topo
+ * do corpo devolve 422, e deixa-lo dentro de `valores`/`dados` grava lixo em
+ * silencio. Por isso o node recusa antes de enviar.
+ */
+export const SISTEMA_ACEITO_NA_ESCRITA: Readonly<
+	Record<string, Readonly<Record<string, readonly string[]>>>
+> = {
+	contato: {
+		criar: ['responsavel_id'],
+		atualizar: ['responsavel_id'],
+		criarOuAtualizar: ['responsavel_id'],
+	},
+	empresa: {
+		criar: ['responsavel_id'],
+		atualizar: ['responsavel_id'],
+		criarOuAtualizar: ['responsavel_id'],
+	},
+	registro: {
+		criar: ['dono_id', 'equipe_id'],
+		atualizar: ['equipe_id'],
+	},
+	negocio: {
+		criar: ['dono_id'],
+		atualizar: [],
+		criarOuAtualizar: ['dono_id'],
+	},
+	atividade: {
+		criar: [],
+		atualizar: [],
+	},
+};
+
+/** Os campos de sistema que a operacao aceita; lista vazia para o que nao consta. */
+export function sistemaAceito(recurso: string, operacao: string): readonly string[] {
+	return SISTEMA_ACEITO_NA_ESCRITA[recurso]?.[operacao] ?? [];
+}
+
+/**
+ * A uniao do que TODAS as operacoes do recurso aceitam — para o mapper quando
+ * a operacao atual nao e conhecida.
+ */
+export function sistemaAceitoNoRecurso(recurso: string): readonly string[] {
+	const porOperacao = SISTEMA_ACEITO_NA_ESCRITA[recurso] ?? {};
+	return [...new Set(Object.values(porOperacao).flat())];
+}
+
+export interface CamposSeparados {
+	/** O que vai dentro de `valores`/`dados`. */
+	doLayout: IDataObject;
+	/** Campos de sistema gravaveis, para o primeiro nivel do corpo. */
+	deSistema: IDataObject;
+	/** Campos de sistema somente leitura que vieram no mapeador — nunca podem ser enviados. */
+	somenteLeitura: string[];
+}
+
+/**
+ * Separa o objeto plano do mapeador em campos do layout e campos de sistema.
+ *
+ * Funcao pura: quem decide o que fazer com cada parte (recusar, hastear para o
+ * topo do corpo) e `envelopeDeEscrita`, em `utilitarios.ts`, que conhece a
+ * operacao e o `NodeOperationError`.
+ */
+export function separarCamposDeSistema(valores: IDataObject): CamposSeparados {
+	const doLayout: IDataObject = {};
+	const deSistema: IDataObject = {};
+	const somenteLeitura: string[] = [];
+
+	for (const [chave, valor] of Object.entries(valores)) {
+		if (CAMPOS_DE_SISTEMA_SOMENTE_LEITURA.includes(chave)) {
+			somenteLeitura.push(chave);
+			continue;
+		}
+		if (CAMPOS_DE_SISTEMA_GRAVAVEIS.includes(chave)) {
+			deSistema[chave] = valor;
+			continue;
+		}
+		doLayout[chave] = valor;
+	}
+
+	return { doLayout, deSistema, somenteLeitura };
+}
+
 function texto(valor: unknown): string {
 	return typeof valor === 'string' ? valor : '';
 }
@@ -107,13 +246,39 @@ export function escolhasDoCampo(campo: IDataObject): INodePropertyOptions[] | un
 	return opcoes.length > 0 ? opcoes : undefined;
 }
 
+export interface OpcoesDoMapeador {
+	/**
+	 * Campos de sistema gravaveis que a operacao atual aceita no topo do corpo.
+	 * Os demais campos de sistema ficam fora do mapper: oferecer `dono_id` numa
+	 * rota que o recusa com 422 seria prometer o que a API nao faz.
+	 */
+	deSistemaAceitos?: readonly string[];
+}
+
 /**
- * Converte o dicionario de campos numa lista de `ResourceMapperField`.
+ * Converte o dicionario de campos numa lista de `ResourceMapperField` para as
+ * operacoes de ESCRITA (Criar, Atualizar, Criar ou Atualizar).
+ *
+ * Tres recortes, alem dos tipos derivados:
+ *
+ * - `somente_leitura: true` NUNCA entra: sao os campos que o servidor preenche
+ *   (criado em/por, atualizado em/por). Em leitura e mapeamento de saida eles
+ *   aparecem normalmente, so que essa lista nao passa por aqui;
+ * - `sistema: true` gravavel entra so quando a operacao aceita o campo no topo
+ *   do corpo (`deSistemaAceitos`), e sai marcado no rotulo para o usuario saber
+ *   que ele nao e do layout;
+ * - flag ausente (instancia com API anterior as flags) e tratada como `false`,
+ *   e o campo entra como sempre entrou.
  *
  * Ordem preservada: a rota ja devolve `ordem ASC, nome ASC`, que e a ordem do
- * layout — reordenar aqui trocaria a leitura do painel pela nossa.
+ * layout, com os de sistema no fim — reordenar aqui trocaria a leitura do
+ * painel pela nossa.
  */
-export function camposParaMapeador(campos: IDataObject[]): ResourceMapperField[] {
+export function camposParaMapeador(
+	campos: IDataObject[],
+	opcoes: OpcoesDoMapeador = {},
+): ResourceMapperField[] {
+	const aceitos = new Set(opcoes.deSistemaAceitos ?? []);
 	const saida: ResourceMapperField[] = [];
 
 	for (const campo of campos) {
@@ -123,12 +288,17 @@ export function camposParaMapeador(campos: IDataObject[]): ResourceMapperField[]
 		const tipoDaApi = texto(campo.tipo);
 		if (TIPOS_DERIVADOS.has(tipoDaApi)) continue;
 
+		if (campo.somente_leitura === true) continue;
+		const deSistema = campo.sistema === true;
+		if (deSistema && !aceitos.has(slug)) continue;
+
 		const tipo = TIPO_POR_CAMPO[tipoDaApi] ?? 'string';
 		const escolhas = tipo === 'options' ? escolhasDoCampo(campo) : undefined;
+		const nome = texto(campo.nome) || slug;
 
 		saida.push({
 			id: slug,
-			displayName: texto(campo.nome) || slug,
+			displayName: deSistema ? `${nome} (sistema)` : nome,
 			// `required` sai do layout daquela organizacao, e e a razao de este
 			// mapper existir. Ver o cabecalho do arquivo.
 			required: campo.obrigatorio === true,

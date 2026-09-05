@@ -2,11 +2,13 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosDeCampo, filtrosSimples } from '../compartilhado/filtros';
-import { valoresDoMapeador } from '../compartilhado/mapeador';
+import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
+	aplicarNoTopo,
 	cabecalhoDeIdempotencia,
 	emailNormalizado,
+	envelopeDeEscrita,
 	exigirUuid,
 	idDoLocalizador,
 	itemDeSaida as item,
@@ -14,6 +16,7 @@ import {
 	objeto,
 	propagarAvisos,
 	semIndefinidos,
+	type EnvelopeDeEscrita,
 } from '../compartilhado/utilitarios';
 
 /**
@@ -71,9 +74,29 @@ function etiquetasDoItem(ctx: IExecuteFunctions, i: number): string[] | undefine
 	return listaDeEtiquetas([...(Array.isArray(escolhidas) ? escolhidas : []), novas]);
 }
 
-/** Le o `resourceMapper` de `valores`, que e alimentado pelo modulo `negocios`. */
-function valoresDoModulo(ctx: IExecuteFunctions, i: number): IDataObject | undefined {
-	return valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
+/** Onde cada operacao recusa o campo de sistema que a rota nao aceita. */
+const ORIENTACAO_DE_SISTEMA: Record<string, string> = {
+	criar:
+		'POST /negocios aceita o dono no topo do corpo, mas nao a equipe. Tire "Equipe" do mapeador de campos.',
+	atualizar:
+		'PATCH /negocios/{id} so aceita valores, contato e etiquetas: dono, pipeline e estagio mudam por operacoes proprias. Tire o campo do mapeador.',
+	criarOuAtualizar:
+		'POST /negocios/upsert aceita o dono no topo do corpo, mas nao a equipe. Tire "Equipe" do mapeador de campos.',
+};
+
+/**
+ * Le o `resourceMapper` de `valores`, que e alimentado pelo modulo `negocios`.
+ *
+ * O dicionario de `negocios` anuncia `dono_id` e `equipe_id` como campos de
+ * sistema; so o dono tem lugar nas rotas de negocio, e no topo do corpo. O que
+ * a operacao nao aceita e recusado aqui, nomeado, em vez de virar 422 ou campo
+ * personalizado gravado em silencio.
+ */
+function valoresDoModulo(ctx: IExecuteFunctions, i: number, operacao: string): EnvelopeDeEscrita {
+	return envelopeDeEscrita(ctx, i, valoresDoMapeador(ctx.getNodeParameter('valores', i, {})), {
+		aceitos: sistemaAceito('negocio', operacao),
+		orientacao: ORIENTACAO_DE_SISTEMA[operacao],
+	});
 }
 
 /**
@@ -143,6 +166,7 @@ export async function executarNegocio(
 
 		case 'criar': {
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
+			const envelope = valoresDoModulo(ctx, i, 'criar');
 			const corpo: IDataObject = {
 				pipeline_id: exigirUuid(
 					ctx,
@@ -151,7 +175,7 @@ export async function executarNegocio(
 					i,
 				),
 				// O servidor exige a chave `valores`, mesmo que vazia.
-				valores: valoresDoModulo(ctx, i) ?? {},
+				valores: envelope.blob ?? {},
 				contato: blocoDeContato(ctx, i),
 				etiquetas: etiquetasDoItem(ctx, i),
 				dono_id:
@@ -159,6 +183,9 @@ export async function executarNegocio(
 						? exigirUuid(ctx, opcoes.dono_id, 'dono', i)
 						: undefined,
 			};
+			// O dono vindo do mapeador vai para o topo do corpo, e nao pode
+			// discordar do que veio em Opcoes.
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const resposta = await requisitar(ctx, {
 				metodo: 'POST',
@@ -185,8 +212,10 @@ export async function executarNegocio(
 		case 'atualizar': {
 			const id = idDoLocalizador(ctx, 'negocioId', 'negocio', i);
 			// Aqui `valores` faz MERGE no servidor — o oposto de `dados` de contato.
+			// A operacao nao aceita campo de sistema nenhum: `envelope.topo` e sempre
+			// vazio, porque qualquer um teria sido recusado com o motivo.
 			const corpo: IDataObject = {
-				valores: valoresDoModulo(ctx, i),
+				valores: valoresDoModulo(ctx, i, 'atualizar').blob,
 				contato: blocoDeContato(ctx, i),
 				etiquetas: etiquetasDoItem(ctx, i),
 			};
@@ -210,11 +239,12 @@ export async function executarNegocio(
 
 		case 'criarOuAtualizar': {
 			const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
+			const envelope = valoresDoModulo(ctx, i, 'criarOuAtualizar');
 			const corpo: IDataObject = {
 				contato: blocoDeContato(ctx, i),
 				pipeline: referenciaDeFunil(ctx, 'pipeline', 'pipeline', i),
 				estagio: referenciaDeFunil(ctx, 'estagio', 'estagio', i),
-				valores: valoresDoModulo(ctx, i),
+				valores: envelope.blob,
 				papel: typeof opcoes.papel === 'string' && opcoes.papel !== '' ? opcoes.papel : undefined,
 				dono_id:
 					typeof opcoes.dono_id === 'string' && opcoes.dono_id !== ''
@@ -226,6 +256,7 @@ export async function executarNegocio(
 				incluir_fechados: opcoes.incluir_fechados,
 				quando_multiplos: opcoes.quando_multiplos,
 			};
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const resposta = await requisitar(ctx, {
 				metodo: 'POST',

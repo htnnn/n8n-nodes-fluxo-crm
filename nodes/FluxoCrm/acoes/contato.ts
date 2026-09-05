@@ -2,11 +2,13 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosSimples } from '../compartilhado/filtros';
-import { valoresDoMapeador } from '../compartilhado/mapeador';
+import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista, requisitarListaSimples } from '../compartilhado/transporte';
 import {
+	aplicarNoTopo,
 	cabecalhoDeIdempotencia,
 	emailNormalizado,
+	envelopeDeEscrita,
 	idDoLocalizador,
 	itemDeSaida as item,
 	listaDeEtiquetas,
@@ -15,6 +17,7 @@ import {
 	propagarAvisos,
 	secaoUnica,
 	semIndefinidos,
+	type EnvelopeDeEscrita,
 } from '../compartilhado/utilitarios';
 
 /** Campos que, sozinhos, ja permitem achar o contato depois. */
@@ -77,22 +80,30 @@ function corpoDoContato(ctx: IExecuteFunctions, i: number, nomeDaColecao: string
  * `PATCH /contatos/{id}` SUBSTITUI o blob inteiro: omitir uma chave apaga o
  * valor. Quem monta automacao espera PATCH-como-merge, entao a mesclagem e o
  * padrao — ao custo de uma leitura a mais, declarada na descricao da opcao.
+ *
+ * O responsavel vem do dicionario como campo de SISTEMA e viaja no topo do
+ * corpo (`envelope.topo`), nao em `dados`: separa-lo antes da mesclagem e o
+ * que impede que ele seja gravado como campo personalizado.
  */
 async function dadosParaGravar(
 	ctx: IExecuteFunctions,
 	i: number,
+	operacao: string,
 	contatoId?: string,
-): Promise<IDataObject | undefined> {
+): Promise<EnvelopeDeEscrita> {
 	const informado = valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
-	if (informado === undefined) return undefined;
+	const envelope = envelopeDeEscrita(ctx, i, informado, {
+		aceitos: sistemaAceito('contato', operacao),
+	});
+	if (envelope.blob === undefined) return envelope;
 
 	const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
 	const deveMesclar = opcoes.mesclarCamposPersonalizados !== false;
-	if (!deveMesclar || contatoId === undefined) return informado;
+	if (!deveMesclar || contatoId === undefined) return envelope;
 
 	const atual = await requisitar(ctx, { metodo: 'GET', caminho: `/contatos/${contatoId}` });
 	const anteriores = objeto((atual.corpo as IDataObject).dados);
-	return { ...anteriores, ...informado };
+	return { ...envelope, blob: { ...anteriores, ...envelope.blob } };
 }
 
 export async function executarContato(
@@ -162,8 +173,9 @@ export async function executarContato(
 
 		case 'criar': {
 			const corpo = corpoDoContato(ctx, i, 'additionalFields');
-			const dados = await dadosParaGravar(ctx, i);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = await dadosParaGravar(ctx, i, 'criar');
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			// O servidor recusa com 422 e a mensagem
 			// "Informe ao menos um identificador: nome, email, telefone, cpf ou
@@ -196,8 +208,9 @@ export async function executarContato(
 		case 'atualizar': {
 			const id = idDoLocalizador(ctx, 'contatoId', 'contato', i);
 			const corpo = corpoDoContato(ctx, i, 'updateFields');
-			const dados = await dadosParaGravar(ctx, i, id);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = await dadosParaGravar(ctx, i, 'atualizar', id);
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const chaves = Object.keys(corpo);
 			if (chaves.length === 0) {
@@ -230,8 +243,9 @@ export async function executarContato(
 
 		case 'criarOuAtualizar': {
 			const corpo = corpoDoContato(ctx, i, 'additionalFields');
-			const dados = await dadosParaGravar(ctx, i);
-			if (dados !== undefined) corpo.dados = dados;
+			const envelope = await dadosParaGravar(ctx, i, 'criarOuAtualizar');
+			if (envelope.blob !== undefined) corpo.dados = envelope.blob;
+			aplicarNoTopo(ctx, i, corpo, envelope.topo);
 
 			const chave = ctx.getNodeParameter('chave', i, []) as string[];
 			const declaradas = chave.filter((slug) => slug !== '');

@@ -12,6 +12,40 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Campos de sistema no mapeador de campos.** Quando a API devolve o
+  dicionário do módulo com as flags `sistema` e `somente_leitura` (API
+  atualizada), o mapeador de Contato, Empresa, Negócio e Registro passa a
+  oferecer também os campos de sistema que a operação aceita — o responsável em
+  Contato e Empresa, o dono e a equipe em `Registro › Criar`, só a equipe em
+  `Registro › Atualizar`, o dono em `Negócio › Criar` e `Criar ou Atualizar` —
+  e os envia no **primeiro nível do corpo**, que é onde o servidor os lê, e não
+  dentro de `valores`/`dados`. Criado em/por e atualizado em/por nunca entram
+  na escrita: se chegarem por expressão, a execução recusa nomeando o campo,
+  sem chamar a API. O mesmo campo informado no painel e no mapeador com valores
+  diferentes também para a execução, em vez de gravar um dos dois em silêncio.
+  Instância com API anterior às flags continua exatamente como antes.
+
+### Corrigido
+
+- `Registro › Atualizar` só com a equipe preenchida devolvia 422: o `PATCH`
+  exige a chave `valores` mesmo vazia, e o node passou a enviá-la (`{}` mescla
+  nada e preserva tudo).
+- "Filtros por Campo" de Registro e Negócio deixa de listar campos de sistema
+  (`dono_id`, `criado_em`…) quando a API os devolve: o servidor confere o slug
+  do filtro contra o layout e recusava com 422. Dono e datas já têm filtro
+  próprio na mesma lista.
+
+### Limitações conhecidas
+
+- O dicionário do módulo `tarefas` anuncia `dono_id` e `equipe_id` como
+  graváveis, mas `POST` e `PATCH /atividades` não os aceitam — o responsável de
+  uma atividade é `usuario_id`. O mapeador de Atividade não os oferece, e a
+  execução recusa se vierem por expressão.
+- `criado_por` e `atualizado_por` aparecem no dicionário, mas a leitura da v1
+  ainda não os devolve nos registros, contatos e empresas.
+
 ## [0.1.1] - 2026-09-05
 
 ### Corrigido

@@ -200,9 +200,11 @@ export const descricaoDoRegistro: INodeProperties[] = [
 		metodo: 'mapearCamposDoModulo',
 		recurso: RECURSO,
 		operacoes: ['criar', 'atualizar'],
-		dependeDe: ['moduloSlug'],
+		// `operation` tambem: os campos de sistema oferecidos mudam entre criar
+		// (dono e equipe) e atualizar (so equipe) — ver `SISTEMA_ACEITO_NA_ESCRITA`.
+		dependeDe: ['moduloSlug', 'operation'],
 		descricao:
-			'Campos do modulo escolhido, lidos do layout desta organizacao. Slug desconhecido e descartado em silencio pelo servidor.',
+			'Campos do modulo escolhido, lidos do layout desta organizacao, mais os campos de sistema que esta operacao aceita (dono, equipe). Slug desconhecido e descartado em silencio pelo servidor.',
 	}),
 
 	{

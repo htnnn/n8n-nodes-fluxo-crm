@@ -1,6 +1,8 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
+import { separarCamposDeSistema } from './mapeador';
+
 /** Um objeto plano, ou `{}` para qualquer outra coisa. */
 export function objeto(valor: unknown): IDataObject {
 	return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
@@ -234,4 +236,112 @@ export function cabecalhoDeIdempotencia(valor: unknown): Record<string, string> 
 	const chave = valor.trim();
 	if (chave === '' || chave.length > 255) return {};
 	return { 'Idempotency-Key': chave };
+}
+
+export interface EnvelopeDeEscrita {
+	/** O que vai em `valores`/`dados`; `undefined` quando nao sobrou campo do layout. */
+	blob: IDataObject | undefined;
+	/** Campos de sistema gravaveis, ja conferidos, para o primeiro nivel do corpo. */
+	topo: IDataObject;
+}
+
+export interface OpcoesDoEnvelope {
+	/** Campos de sistema que ESTA operacao aceita no topo do corpo (`sistemaAceito`). */
+	aceitos: readonly string[];
+	/** Onde o usuario deve informar o campo que a operacao recusa. */
+	orientacao?: string;
+}
+
+/**
+ * Separa o que o mapeador devolveu em `valores`/`dados` (campos do layout) e
+ * primeiro nivel do corpo (campos de sistema), recusando o que a rota nao
+ * aceita.
+ *
+ * O dicionario anuncia responsavel, equipe e os quatro campos de auditoria
+ * junto dos campos do layout, mas eles NAO vivem em `valores`/`dados`: o
+ * servidor le `dono_id`, `responsavel_id` e `equipe_id` no topo do corpo, e os
+ * schemas sao `.strict()`. Deixa-los dentro do blob gravaria lixo em silencio
+ * — e mandar um que a rota nao aceita no topo devolveria 422. As duas saidas
+ * erradas viram erro nomeado aqui, antes de qualquer requisicao.
+ *
+ * `blob` volta `undefined` quando so vieram campos de sistema, e nunca `{}`:
+ * em `dados`, um objeto vazio APAGA todos os campos personalizados.
+ */
+export function envelopeDeEscrita(
+	ctx: IExecuteFunctions,
+	i: number,
+	mapeado: IDataObject | undefined,
+	opcoes: OpcoesDoEnvelope,
+): EnvelopeDeEscrita {
+	if (mapeado === undefined) return { blob: undefined, topo: {} };
+
+	const { doLayout, deSistema, somenteLeitura } = separarCamposDeSistema(mapeado);
+
+	if (somenteLeitura.length > 0) {
+		throw new NodeOperationError(
+			ctx.getNode(),
+			`Campo somente leitura no corpo: ${somenteLeitura.join(', ')}`,
+			{
+				description:
+					'Criado em/por e atualizado em/por sao preenchidos pelo servidor. Eles servem para leitura e para mapear a saida, nunca para escrita — tire-os do mapeador de campos.',
+				itemIndex: i,
+			},
+		);
+	}
+
+	const topo: IDataObject = {};
+	for (const [chave, valor] of Object.entries(deSistema)) {
+		if (!opcoes.aceitos.includes(chave)) {
+			throw new NodeOperationError(
+				ctx.getNode(),
+				`Esta operacao nao aceita o campo de sistema "${chave}"`,
+				{
+					description:
+						opcoes.orientacao ??
+						`A rota desta operacao nao recebe ${chave}, nem no topo do corpo nem dentro dos valores. Tire-o do mapeador de campos.`,
+					itemIndex: i,
+				},
+			);
+		}
+		// `null` passa: e como se limpa o responsavel ou a equipe. Texto tem de
+		// ser UUID — a API devolve 404 (e nao 422) para identificador malformado.
+		topo[chave] = typeof valor === 'string' ? exigirUuid(ctx, valor, chave, i) : valor;
+	}
+
+	return { blob: Object.keys(doLayout).length > 0 ? doLayout : undefined, topo };
+}
+
+/**
+ * Poe os campos de sistema do mapeador no primeiro nivel do corpo.
+ *
+ * O mesmo campo pode vir por dois caminhos — "Campos Adicionais" e o mapeador
+ * — e escolher um deles em silencio gravaria o valor que o usuario nao viu.
+ * Valores iguais passam; diferentes param a execucao nomeando o campo.
+ */
+export function aplicarNoTopo(
+	ctx: IExecuteFunctions,
+	i: number,
+	corpo: IDataObject,
+	topo: IDataObject,
+): void {
+	for (const [chave, valor] of Object.entries(topo)) {
+		const atual = corpo[chave];
+		const informado = atual !== undefined && atual !== '';
+		const iguais =
+			typeof atual === 'string' && typeof valor === 'string'
+				? atual.trim().toLowerCase() === valor.toLowerCase()
+				: atual === valor;
+
+		if (informado && !iguais) {
+			throw new NodeOperationError(
+				ctx.getNode(),
+				`O campo "${chave}" foi informado duas vezes com valores diferentes`,
+				{
+					description: `Ele veio num campo proprio do painel e tambem no mapeador de campos, com valores que nao batem. Preencha-o num lugar so.`,
+					itemIndex: i,
+				},
+			);
+		}
+		corpo[chave] = valor;
+	}
 }
