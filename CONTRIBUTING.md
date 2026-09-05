@@ -150,22 +150,57 @@ simplesmente não existe enquanto ninguém publicou o nome. Ou seja: a versão q
 cria o pacote no npm **não pode** ser publicada por OIDC. É um ovo-e-galinha, e
 não há como contorná-lo pelo lado do GitHub.
 
-Então a `0.1.0` sai com autenticação normal, e só depois o OIDC assume.
+Então a `0.1.0` sai com autenticação normal, e só depois o OIDC assume. Há dois
+caminhos. **Escolha um.**
 
-### Passo 1 — corte a tag, sem criar o Release
+| | Caminho A — token temporário | Caminho B — publicar da sua máquina |
+|---|---|---|
+| Quem publica | o GitHub Actions | você, no seu terminal |
+| Existe Release da `v0.1.0`? | sim, desde o começo | não, ou criado depois e vermelho |
+| Precisa de secret? | sim, apagado logo em seguida | não |
+| **Recomendado** | ✅ deixa o histórico coerente | quando você não quer criar secret nenhum |
+
+---
+
+### Caminho A — token temporário (recomendado)
+
+Mantém a regra que vale para sempre: **toda versão publicada tem um Release
+correspondente, e quem publica é o CI.**
+
+**A1.** Em [npmjs.com](https://www.npmjs.com) → **Access Tokens** → gere um token
+de publicação (*Automation*, ou *Granular* com permissão de escrita).
+
+**A2.** No GitHub: **Settings → Secrets and variables → Actions → New repository
+secret**, nome `NPM_TOKEN`, valor o token. O `publish.yml` detecta o secret
+sozinho e usa esse caminho no lugar do OIDC.
+
+**A3.** Corte a release normalmente:
+
+```bash
+npm run release -- 0.1.0
+```
+
+A `0.1.0` já é a versão do `package.json` e já está descrita no `CHANGELOG.md`,
+então o comando não bumpa nem promove nada: ele confere tudo, cria a tag
+`v0.1.0`, empurra e abre o GitHub Release — que dispara o workflow, e o workflow
+publica. Acompanhe com `gh run list --workflow "Publicar no npm"`.
+
+**A4.** Cadastre o publicador confiável (seção abaixo) e **apague o secret
+`NPM_TOKEN`**. A partir daí o OIDC assume sozinho.
+
+---
+
+### Caminho B — publicar da sua máquina
+
+**B1.** Corte a tag **sem** criar o Release, para não disparar o workflow (que
+ainda não teria como se autenticar):
 
 ```bash
 npm run release -- 0.1.0 --sem-github
 ```
 
-A `0.1.0` já é a versão do `package.json` e já está descrita no `CHANGELOG.md`,
-então esse comando não bumpa nem promove nada: ele confere tudo, cria a tag
-`v0.1.0` e a empurra. **Nenhuma publicação é disparada**, porque o Release não
-foi criado.
-
-### Passo 2 — publique à mão, uma única vez
-
-Precisa de `dist/` construído (o passo 1 já rodou `npm run build`).
+**B2.** Publique à mão, uma única vez. O `dist/` já foi construído pelo passo
+anterior.
 
 O `prepublishOnly` deste pacote (`n8n-node prerelease`) **sai com código 1 de
 propósito**, para barrar `npm publish` avulso. Para a publicação deliberada,
@@ -181,16 +216,20 @@ RELEASE_MODE=true npm publish --access public
 $env:RELEASE_MODE='true'; npm publish --access public; Remove-Item Env:\RELEASE_MODE
 ```
 
-> **Alternativa, se preferir não publicar da sua máquina:** crie um token de
-> publicação em npmjs.com, cadastre-o como o secret `NPM_TOKEN` do repositório e
-> dispare o workflow **Publicar no npm** manualmente (`workflow_dispatch`). Ele
-> detecta o secret sozinho e usa esse caminho. **Apague o secret logo depois** —
-> o passo seguinte torna-o desnecessário, e um token de longa duração parado num
-> repositório é exatamente o risco que o OIDC elimina.
+**B3.** Cadastre o publicador confiável (seção abaixo).
 
-### Passo 3 — cadastre o publicador confiável
+**B4.** *(opcional)* Crie o Release da `v0.1.0` pela interface do GitHub —
+**Releases → Draft a new release**, escolha a tag `v0.1.0` que já está lá, título
+`v0.1.0`, e cole no corpo a seção `## [0.1.0]` do `CHANGELOG.md`. O workflow vai
+rodar e tentar republicar; o npm recusa com 403 ("cannot publish over previously
+published version") e o job fica vermelho. É esperado e inofensivo — mas é
+exatamente por isso que o caminho A é o recomendado.
 
-Agora que o pacote existe:
+---
+
+### Cadastrar o publicador confiável (os dois caminhos)
+
+Agora que o pacote existe no registro:
 
 1. Entre em [npmjs.com](https://www.npmjs.com) com a conta dona do pacote.
 2. Página do pacote → **Settings** → **Trusted Publisher**.
@@ -205,23 +244,9 @@ Agora que o pacote existe:
 
 4. Se a conta exige 2FA para publicar, marque a exceção para **Trusted
    Publishers** — senão o CI é barrado pedindo OTP.
-5. Se você criou o secret `NPM_TOKEN` no passo 2, **apague-o agora**.
-
-### Passo 4 — crie o Release da `v0.1.0`
-
-Pela interface do GitHub, ou:
-
-```bash
-gh release create v0.1.0 --title v0.1.0 --notes-file <(sed -n '/## \[0.1.0\]/,/## \[/p' CHANGELOG.md)
-```
-
-Isso é opcional para a `0.1.0` — o pacote já foi publicado no passo 2. Mas criar
-o Release deixa o histórico coerente: **toda versão publicada tem um Release
-correspondente**. Se você criar, o workflow vai rodar e tentar republicar a
-`0.1.0`; o npm recusa com 403 ("cannot publish over previously published
-version") e o job fica vermelho. É esperado e inofensivo — se preferir evitar o
-vermelho, crie o Release marcando-o como rascunho e publique-o depois de já ter
-subido a `0.1.1`.
+5. **Se você criou o secret `NPM_TOKEN`, apague-o agora.** Um token de longa
+   duração parado num repositório é exatamente o risco que o OIDC elimina — e
+   enquanto ele existir, o `publish.yml` vai preferi-lo ao OIDC.
 
 ---
 
