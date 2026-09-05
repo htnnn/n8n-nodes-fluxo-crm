@@ -5,7 +5,10 @@ import {
 	CAMPOS_DE_SISTEMA_GRAVAVEIS,
 	CAMPOS_DE_SISTEMA_SOMENTE_LEITURA,
 	camposParaMapeador,
+	ColisaoComCampoDeSistema,
 	escolhasDoCampo,
+	regrasDeSistema,
+	rotuloDaEscrita,
 	separarCamposDeSistema,
 	SISTEMA_ACEITO_NA_ESCRITA,
 	sistemaAceito,
@@ -225,10 +228,102 @@ describe('campos de sistema no mapper de escrita', () => {
 		expect(sistemaAceitoNoRecurso('atividade')).toEqual([]);
 		// Toda entrada da tabela so cita campos que existem na lista de gravaveis.
 		for (const porOperacao of Object.values(SISTEMA_ACEITO_NA_ESCRITA)) {
-			for (const aceitos of Object.values(porOperacao)) {
-				for (const slug of aceitos) expect(CAMPOS_DE_SISTEMA_GRAVAVEIS).toContain(slug);
+			for (const regras of Object.values(porOperacao)) {
+				for (const slug of Object.keys(regras)) {
+					expect(CAMPOS_DE_SISTEMA_GRAVAVEIS).toContain(slug);
+				}
 			}
 		}
+	});
+
+	it('a tabela diz tambem quem aceita `null`, e isso segue o `.nullable()` do schema', () => {
+		// `registros.ts`: `dono_id: z.string().uuid().optional()` — SEM `.nullable()`;
+		// `equipe_id: z.string().uuid().nullable().optional()`.
+		expect(regrasDeSistema('registro', 'criar')).toMatchObject({
+			dono_id: { aceito: true, anulavel: false },
+			equipe_id: { aceito: true, anulavel: true },
+		});
+		expect(regrasDeSistema('registro', 'atualizar').equipe_id).toEqual({
+			aceito: true,
+			anulavel: true,
+		});
+		// `negocios.ts`: `dono_id` opcional e NAO anulavel em criar e no upsert.
+		for (const operacao of ['criar', 'criarOuAtualizar']) {
+			expect(regrasDeSistema('negocio', operacao).dono_id, operacao).toEqual({
+				aceito: true,
+				anulavel: false,
+			});
+		}
+		// `contatos.ts` / `empresas.ts`: `.optional().nullable()` nas tres rotas.
+		for (const recurso of ['contato', 'empresa']) {
+			for (const operacao of ['criar', 'atualizar', 'criarOuAtualizar']) {
+				expect(regrasDeSistema(recurso, operacao).responsavel_id, `${recurso} ${operacao}`).toEqual(
+					{ aceito: true, anulavel: true },
+				);
+			}
+		}
+		// Recurso ou operacao fora da tabela: nenhuma regra (falha fechada).
+		expect(regrasDeSistema('lead', 'criar')).toEqual({});
+		expect(regrasDeSistema('registro', 'excluir')).toEqual({});
+		// Campo recusado NUNCA e anulavel: nao ha "aceita vazio, mas nao aceita".
+		for (const porOperacao of Object.values(SISTEMA_ACEITO_NA_ESCRITA)) {
+			for (const regras of Object.values(porOperacao)) {
+				for (const [slug, regra] of Object.entries(regras)) {
+					if (!regra.aceito) expect(regra.anulavel, slug).toBe(false);
+				}
+			}
+		}
+	});
+
+	it('o rotulo da operacao nomeia a recusa como o painel a chama', () => {
+		expect(rotuloDaEscrita('registro', 'criar')).toBe('Registro › Criar');
+		expect(rotuloDaEscrita('negocio', 'criarOuAtualizar')).toBe('Negocio › Criar ou Atualizar');
+		// Fora do mapa, o identificador cru — que ainda diz mais do que omitir.
+		expect(rotuloDaEscrita('lead', 'converter')).toBe('lead › converter');
+	});
+});
+
+describe('colisao entre campo do layout e campo de sistema', () => {
+	it('campo do LAYOUT com slug de campo de sistema e RECUSADO, nomeando o campo', () => {
+		// O gerador do servidor troca o que nao e alfanumerico por hifen
+		// (`ModulosService.gerarSlug`), mas `modulos.service.ts` e `seed.ts` honram
+		// `campo.slug ?? gerarSlug(nome)` — um slug DECLARADO passa como veio.
+		for (const slug of [...CAMPOS_DE_SISTEMA_GRAVAVEIS, ...CAMPOS_DE_SISTEMA_SOMENTE_LEITURA]) {
+			expect(
+				() => camposParaMapeador([campo({ slug, nome: 'Do layout', sistema: false })]),
+				slug,
+			).toThrow(ColisaoComCampoDeSistema);
+		}
+
+		try {
+			camposParaMapeador([campo({ slug: 'dono_id', nome: 'Dono do imovel', sistema: false })]);
+			expect.unreachable('a colisao tem de parar a construcao do mapper');
+		} catch (erro) {
+			expect(erro).toBeInstanceOf(ColisaoComCampoDeSistema);
+			expect((erro as ColisaoComCampoDeSistema).slug).toBe('dono_id');
+			expect((erro as Error).message).toContain('dono_id');
+		}
+	});
+
+	it('o mesmo slug com `sistema: true` NAO colide: e o campo de sistema de verdade', () => {
+		const campos = camposParaMapeador(
+			[
+				campo({ slug: 'titulo', nome: 'Titulo' }),
+				campo({ slug: 'dono_id', nome: 'Responsavel', sistema: true }),
+			],
+			{ deSistemaAceitos: ['dono_id'] },
+		);
+		expect(campos.map((c) => c.id)).toEqual(['titulo', 'dono_id']);
+	});
+
+	it('auditoria sem a flag `sistema` (instancia anterior) sai pelo somente_leitura, sem colidir', () => {
+		// `somente_leitura: true` e conferido ANTES da colisao: numa instancia sem
+		// a flag `sistema`, acusar colisao aqui seria acusar o que e normal.
+		const campos = camposParaMapeador([
+			campo({ slug: 'titulo', nome: 'Titulo' }),
+			campo({ slug: 'criado_em', nome: 'Criado em', somente_leitura: true }),
+		]);
+		expect(campos.map((c) => c.id)).toEqual(['titulo']);
 	});
 });
 

@@ -2,7 +2,7 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosSimples } from '../compartilhado/filtros';
-import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista, requisitarListaSimples } from '../compartilhado/transporte';
 import {
 	aplicarNoTopo,
@@ -93,7 +93,8 @@ async function dadosParaGravar(
 ): Promise<EnvelopeDeEscrita> {
 	const informado = valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
 	const envelope = envelopeDeEscrita(ctx, i, informado, {
-		aceitos: sistemaAceito('contato', operacao),
+		recurso: 'contato',
+		operacao,
 	});
 	if (envelope.blob === undefined) return envelope;
 

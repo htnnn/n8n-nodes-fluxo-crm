@@ -1,7 +1,7 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { separarCamposDeSistema } from './mapeador';
+import { regrasDeSistema, rotuloDaEscrita, separarCamposDeSistema } from './mapeador';
 
 /** Um objeto plano, ou `{}` para qualquer outra coisa. */
 export function objeto(valor: unknown): IDataObject {
@@ -246,8 +246,10 @@ export interface EnvelopeDeEscrita {
 }
 
 export interface OpcoesDoEnvelope {
-	/** Campos de sistema que ESTA operacao aceita no topo do corpo (`sistemaAceito`). */
-	aceitos: readonly string[];
+	/** Recurso da tabela de escrita: `contato`, `empresa`, `negocio`, `registro`, `atividade`. */
+	recurso: string;
+	/** Operacao da tabela: `criar`, `atualizar`, `criarOuAtualizar`. */
+	operacao: string;
 	/** Onde o usuario deve informar o campo que a operacao recusa. */
 	orientacao?: string;
 }
@@ -266,6 +268,13 @@ export interface OpcoesDoEnvelope {
  *
  * `blob` volta `undefined` quando so vieram campos de sistema, e nunca `{}`:
  * em `dados`, um objeto vazio APAGA todos os campos personalizados.
+ *
+ * `null` NAO passa em todo campo aceito. Ele so limpa o valor onde o schema
+ * declara `.nullable()` — `equipe_id` em Registro, `responsavel_id` em Contato
+ * e Empresa. `dono_id` e `z.string().uuid().optional()` em `registros.ts` e
+ * `negocios.ts` (criar e upsert): `optional()` aceita a AUSENCIA da chave, e
+ * `null` reprova com 422. A tabela em `mapeador.ts` guarda essa diferenca por
+ * (rota × campo) e a recusa acontece aqui, antes da requisicao.
  */
 export function envelopeDeEscrita(
 	ctx: IExecuteFunctions,
@@ -289,9 +298,13 @@ export function envelopeDeEscrita(
 		);
 	}
 
+	const regras = regrasDeSistema(opcoes.recurso, opcoes.operacao);
+	const rotulo = rotuloDaEscrita(opcoes.recurso, opcoes.operacao);
+
 	const topo: IDataObject = {};
 	for (const [chave, valor] of Object.entries(deSistema)) {
-		if (!opcoes.aceitos.includes(chave)) {
+		const regra = regras[chave];
+		if (regra === undefined || !regra.aceito) {
 			throw new NodeOperationError(
 				ctx.getNode(),
 				`Esta operacao nao aceita o campo de sistema "${chave}"`,
@@ -303,8 +316,19 @@ export function envelopeDeEscrita(
 				},
 			);
 		}
-		// `null` passa: e como se limpa o responsavel ou a equipe. Texto tem de
-		// ser UUID — a API devolve 404 (e nao 422) para identificador malformado.
+		if (valor === null && !regra.anulavel) {
+			throw new NodeOperationError(
+				ctx.getNode(),
+				`"${rotulo}" nao aceita vazio no campo de sistema "${chave}"`,
+				{
+					description: `O schema desta rota declara ${chave} como opcional, mas NAO anulavel: mandar vazio devolve 422. Para deixar o campo sem valor, tire-o do mapeador de campos — a ausencia da chave e o que o servidor entende como "nao mexer".`,
+					itemIndex: i,
+				},
+			);
+		}
+		// `null` chega aqui so onde a rota o aceita: e como se limpa o responsavel
+		// ou a equipe. Texto tem de ser UUID — a API devolve 404 (e nao 422) para
+		// identificador malformado.
 		topo[chave] = typeof valor === 'string' ? exigirUuid(ctx, valor, chave, i) : valor;
 	}
 

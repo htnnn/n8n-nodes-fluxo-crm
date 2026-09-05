@@ -2,7 +2,7 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosDeCampo, filtrosSimples } from '../compartilhado/filtros';
-import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
 	aplicarNoTopo,
@@ -94,7 +94,8 @@ const ORIENTACAO_DE_SISTEMA: Record<string, string> = {
  */
 function valoresDoModulo(ctx: IExecuteFunctions, i: number, operacao: string): EnvelopeDeEscrita {
 	return envelopeDeEscrita(ctx, i, valoresDoMapeador(ctx.getNodeParameter('valores', i, {})), {
-		aceitos: sistemaAceito('negocio', operacao),
+		recurso: 'negocio',
+		operacao,
 		orientacao: ORIENTACAO_DE_SISTEMA[operacao],
 	});
 }

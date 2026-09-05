@@ -81,10 +81,19 @@ const TIPOS_SOMENTE_LEITURA = new Set(['autonumerico']);
 // que vem do layout. O que esta abaixo e a regra que separa os dois.
 //
 // As listas sao fechadas e copiadas do servidor porque na EXECUCAO o node so
-// tem o objeto plano do mapeador, sem as flags. Nao ha risco de colisao com
-// campo do layout: o gerador de slug do dicionario troca tudo que nao e
-// alfanumerico por hifen ("Dono id" vira `dono-id`), entao um slug com
-// underscore nunca nasce do layout.
+// tem o objeto plano do mapeador, sem as flags.
+//
+// COLISAO COM CAMPO DO LAYOUT. O gerador de slug do dicionario troca tudo que
+// nao e alfanumerico por hifen (`ModulosService.gerarSlug` e
+// `normalizarSlugSeed`, no monorepo: `.replace(/[^a-z0-9]+/g, "-")`), entao
+// "Dono id" vira `dono-id` e nao `dono_id`. Mas o slug NAO e sempre gerado:
+// `modulos.service.ts` e `seed.ts` honram `campo.slug ?? gerarSlug(campo.nome)`,
+// e um slug declarado passa como veio. O que se pode afirmar e mais estreito:
+// o gerador troca por hifen e nenhum seed atual declara esses 7 nomes. Se
+// mesmo assim um campo de layout chegar com um deles, `camposParaMapeador`
+// RECUSA nomeando o campo, em vez de trata-lo como campo de sistema em
+// silencio — o que mandaria o valor para o topo do corpo e o gravaria na
+// coluna errada, ou o descartaria com 422.
 
 /** Campos de sistema que a escrita aceita, no primeiro nivel do corpo. */
 export const CAMPOS_DE_SISTEMA_GRAVAVEIS: readonly string[] = [
@@ -104,59 +113,108 @@ export const CAMPOS_DE_SISTEMA_SOMENTE_LEITURA: readonly string[] = [
 	'atualizado_por',
 ];
 
+/** O que uma rota de escrita faz com um campo de sistema no topo do corpo. */
+export interface RegraDeCampoDeSistema {
+	/** A rota recebe o campo. `false` e recusa antes da requisicao (422 certo). */
+	aceito: boolean;
+	/**
+	 * O schema declara `.nullable()`: `null` LIMPA o valor. Sem isso, `null`
+	 * reprova no `z.string().uuid()` e volta 422 sem o node ter avisado nada.
+	 */
+	anulavel: boolean;
+}
+
+export type RegrasDeCamposDeSistema = Readonly<Record<string, RegraDeCampoDeSistema>>;
+
 /**
- * Quais campos de sistema cada rota de escrita aceita no primeiro nivel.
+ * Quais campos de sistema cada rota de escrita aceita no primeiro nivel, e
+ * quais deles aceitam `null`.
  *
- * Conferido schema a schema em `apps/api/src/api-publica/rotas/` do branch
- * `integracao/pilha-na-main`:
+ * Conferido schema a schema em `apps/api/src/api-publica/rotas/` de
+ * `origin/main`, por NOME DE SIMBOLO (numero de linha envelhece a cada commit):
  *
- * - `contatos.ts:130` — `responsavel_id` no schema base, herdado por
- *   `atualizarSchema` (`.partial()`, l.183) e `upsertSchema` (`.extend()`, l.185);
- * - `empresas.ts:36` — idem, com os derivados nas l.43-44;
- * - `registros.ts:70-76` — criar aceita `dono_id` e `equipe_id`; `79-84` —
- *   atualizar aceita SO `equipe_id`;
- * - `negocios.ts:172-191` — criar aceita `dono_id`; `197-209` — atualizar nao
- *   aceita nenhum ("dono e pipeline mudam por endpoints proprios");
- *   `400-429` — upsert aceita `dono_id`. Nenhuma das tres aceita `equipe_id`;
- * - `atividades.ts:40-68` — nenhum: o responsavel da atividade e `usuario_id`,
- *   e a rota e `.strict()`. O dicionario de `tarefas` anuncia `dono_id` e
- *   `equipe_id` mesmo assim, por isso a lista aqui e por ROTA e nao por modulo.
+ * - `contatos.ts`, `baseContato` — `responsavel_id: z.string().uuid().optional().nullable()`,
+ *   herdado por `criarSchema`, `atualizarSchema` (`.partial()`) e
+ *   `upsertSchema` (`.extend()`);
+ * - `empresas.ts`, `criarCampos` — idem, e os mesmos tres derivados;
+ * - `registros.ts`, `criarSchema` — `dono_id: z.string().uuid().optional()`
+ *   (SEM `.nullable()`) e `equipe_id: z.string().uuid().nullable().optional()`;
+ *   `atualizarSchema` — so `equipe_id`, tambem anulavel;
+ * - `negocios.ts`, `criarSchema` e `upsertSchema` — `dono_id` OPCIONAL e NAO
+ *   anulavel nos dois; `atualizarSchema` nao aceita nenhum ("dono e pipeline
+ *   mudam por endpoints proprios"). Nenhuma das tres aceita `equipe_id`;
+ * - `atividades.ts`, `criarSchema`/`atualizarSchema` — nenhum: o responsavel da
+ *   atividade e `usuario_id`. O dicionario de `tarefas` anuncia `dono_id` e
+ *   `equipe_id` mesmo assim, por isso esta tabela e por ROTA e nao por modulo.
  *
- * Todos os schemas sao `.strict()`: mandar um campo fora desta lista no topo
- * do corpo devolve 422, e deixa-lo dentro de `valores`/`dados` grava lixo em
- * silencio. Por isso o node recusa antes de enviar.
+ * Duas recusas saem daqui, as duas antes de qualquer requisicao. Todos os
+ * schemas sao `.strict()`, entao um campo com `aceito: false` no topo devolve
+ * 422 — e deixa-lo dentro de `valores`/`dados` grava lixo em silencio. E um
+ * campo com `anulavel: false` recebendo `null` tambem devolve 422: `optional()`
+ * aceita a AUSENCIA da chave, nunca o valor `null`.
  */
 export const SISTEMA_ACEITO_NA_ESCRITA: Readonly<
-	Record<string, Readonly<Record<string, readonly string[]>>>
+	Record<string, Readonly<Record<string, RegrasDeCamposDeSistema>>>
 > = {
 	contato: {
-		criar: ['responsavel_id'],
-		atualizar: ['responsavel_id'],
-		criarOuAtualizar: ['responsavel_id'],
+		criar: { responsavel_id: { aceito: true, anulavel: true } },
+		atualizar: { responsavel_id: { aceito: true, anulavel: true } },
+		criarOuAtualizar: { responsavel_id: { aceito: true, anulavel: true } },
 	},
 	empresa: {
-		criar: ['responsavel_id'],
-		atualizar: ['responsavel_id'],
-		criarOuAtualizar: ['responsavel_id'],
+		criar: { responsavel_id: { aceito: true, anulavel: true } },
+		atualizar: { responsavel_id: { aceito: true, anulavel: true } },
+		criarOuAtualizar: { responsavel_id: { aceito: true, anulavel: true } },
 	},
 	registro: {
-		criar: ['dono_id', 'equipe_id'],
-		atualizar: ['equipe_id'],
+		criar: {
+			dono_id: { aceito: true, anulavel: false },
+			equipe_id: { aceito: true, anulavel: true },
+		},
+		// `dono_id` listado com `aceito: false` de proposito: o schema foi lido e
+		// ele NAO esta la ("trocar de dono e outra operacao"), o que e diferente
+		// de "ninguem conferiu".
+		atualizar: {
+			dono_id: { aceito: false, anulavel: false },
+			equipe_id: { aceito: true, anulavel: true },
+		},
 	},
 	negocio: {
-		criar: ['dono_id'],
-		atualizar: [],
-		criarOuAtualizar: ['dono_id'],
+		criar: {
+			dono_id: { aceito: true, anulavel: false },
+			equipe_id: { aceito: false, anulavel: false },
+		},
+		atualizar: {
+			dono_id: { aceito: false, anulavel: false },
+			equipe_id: { aceito: false, anulavel: false },
+		},
+		criarOuAtualizar: {
+			dono_id: { aceito: true, anulavel: false },
+			equipe_id: { aceito: false, anulavel: false },
+		},
 	},
 	atividade: {
-		criar: [],
-		atualizar: [],
+		criar: {
+			dono_id: { aceito: false, anulavel: false },
+			equipe_id: { aceito: false, anulavel: false },
+		},
+		atualizar: {
+			dono_id: { aceito: false, anulavel: false },
+			equipe_id: { aceito: false, anulavel: false },
+		},
 	},
 };
 
+/** As regras desta operacao; objeto vazio para recurso ou operacao fora da tabela. */
+export function regrasDeSistema(recurso: string, operacao: string): RegrasDeCamposDeSistema {
+	return SISTEMA_ACEITO_NA_ESCRITA[recurso]?.[operacao] ?? {};
+}
+
 /** Os campos de sistema que a operacao aceita; lista vazia para o que nao consta. */
 export function sistemaAceito(recurso: string, operacao: string): readonly string[] {
-	return SISTEMA_ACEITO_NA_ESCRITA[recurso]?.[operacao] ?? [];
+	return Object.entries(regrasDeSistema(recurso, operacao))
+		.filter(([, regra]) => regra.aceito)
+		.map(([slug]) => slug);
 }
 
 /**
@@ -165,7 +223,62 @@ export function sistemaAceito(recurso: string, operacao: string): readonly strin
  */
 export function sistemaAceitoNoRecurso(recurso: string): readonly string[] {
 	const porOperacao = SISTEMA_ACEITO_NA_ESCRITA[recurso] ?? {};
-	return [...new Set(Object.values(porOperacao).flat())];
+	return [
+		...new Set(
+			Object.keys(porOperacao).flatMap((operacao) => sistemaAceito(recurso, operacao)),
+		),
+	];
+}
+
+const ROTULO_DO_RECURSO: Readonly<Record<string, string>> = {
+	contato: 'Contato',
+	empresa: 'Empresa',
+	negocio: 'Negocio',
+	registro: 'Registro',
+	atividade: 'Atividade',
+};
+
+const ROTULO_DA_OPERACAO: Readonly<Record<string, string>> = {
+	criar: 'Criar',
+	atualizar: 'Atualizar',
+	criarOuAtualizar: 'Criar ou Atualizar',
+};
+
+/**
+ * Como a operacao se chama no painel (`Registro › Criar`), para as mensagens de
+ * recusa. Recurso ou operacao fora do mapa aparece com o identificador cru, que
+ * ainda diz mais do que omitir.
+ */
+export function rotuloDaEscrita(recurso: string, operacao: string): string {
+	const doRecurso = ROTULO_DO_RECURSO[recurso] ?? recurso;
+	const daOperacao = ROTULO_DA_OPERACAO[operacao] ?? operacao;
+	return `${doRecurso} › ${daOperacao}`;
+}
+
+/** Os 7 nomes que o node trata como campo de sistema na escrita e na leitura. */
+const NOMES_DE_SISTEMA: ReadonlySet<string> = new Set([
+	...CAMPOS_DE_SISTEMA_GRAVAVEIS,
+	...CAMPOS_DE_SISTEMA_SOMENTE_LEITURA,
+]);
+
+/**
+ * Um campo do LAYOUT chegou com o slug de um campo de sistema.
+ *
+ * Classe propria porque `mapeador.ts` e puro: quem conhece o n8n
+ * (`metodos/resourceMapping.ts`) a converte em `NodeOperationError` com
+ * `itemIndex`. Fail-closed: sem isso o campo iria para o topo do corpo — a
+ * coluna errada — ou levaria 422 sem o usuario saber por que.
+ */
+export class ColisaoComCampoDeSistema extends Error {
+	readonly slug: string;
+
+	constructor(slug: string) {
+		super(
+			`O campo "${slug}" do layout tem o mesmo identificador de um campo de sistema do Fluxo CRM`,
+		);
+		this.name = 'ColisaoComCampoDeSistema';
+		this.slug = slug;
+	}
 }
 
 export interface CamposSeparados {
@@ -288,8 +401,16 @@ export function camposParaMapeador(
 		const tipoDaApi = texto(campo.tipo);
 		if (TIPOS_DERIVADOS.has(tipoDaApi)) continue;
 
+		// Antes da colisao: `somente_leitura: true` sai daqui de qualquer jeito, e
+		// numa instancia sem a flag `sistema` os campos de auditoria chegam so com
+		// essa marca — recusa-los como colisao seria acusar o que e normal.
 		if (campo.somente_leitura === true) continue;
+
 		const deSistema = campo.sistema === true;
+		// Colisao: campo do LAYOUT com o slug de um campo de sistema. Ver a nota
+		// "COLISAO COM CAMPO DO LAYOUT" no topo deste arquivo — o gerador do
+		// servidor nao produz esses nomes, mas um slug DECLARADO passa como veio.
+		if (!deSistema && NOMES_DE_SISTEMA.has(slug)) throw new ColisaoComCampoDeSistema(slug);
 		if (deSistema && !aceitos.has(slug)) continue;
 
 		const tipo = TIPO_POR_CAMPO[tipoDaApi] ?? 'string';

@@ -99,6 +99,18 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   `webhooks:ler`, que é o caso legítimo) e **404** (instância anterior à rota);
   401, 5xx, 429 e rede fora sobem como erro, com o motivo. Vale para o gatilho e
   para `Webhook › Criar/Atualizar`.
+- **`Dono` vazio é recusado antes da requisição em `Registro › Criar` e
+  `Negócio › Criar` / `Criar ou Atualizar`.** O node deixava `null` passar para
+  o primeiro nível do corpo em qualquer campo de sistema aceito, mas o schema
+  do servidor declara `dono_id` como `optional()` sem `.nullable()` nessas três
+  rotas: o vazio voltava 422. Agora a recusa nomeia o campo e a operação, e
+  explica que a forma de deixar o campo sem valor é tirá-lo do mapeador.
+  `equipe_id` (Registro) e `responsavel_id` (Contato e Empresa) são `.nullable()`
+  e continuam aceitando vazio, que é como se limpa o responsável.
+- Campo do **layout** cujo slug colide com um campo de sistema (`dono_id`,
+  `criado_em`…) passa a ser recusado ao montar o mapeador, dizendo qual é o
+  campo e onde renomeá-lo, em vez de ser tratado como campo de sistema em
+  silêncio — o que mandaria o valor para a coluna errada do corpo.
 
 ### Limitações conhecidas
 

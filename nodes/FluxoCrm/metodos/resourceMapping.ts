@@ -1,11 +1,14 @@
-import type { ILoadOptionsFunctions, ResourceMapperFields } from 'n8n-workflow';
+import type { ILoadOptionsFunctions, IDataObject, ResourceMapperFields } from 'n8n-workflow';
+import { NodeOperationError } from 'n8n-workflow';
 
 import { camposDoModulo } from '../compartilhado/capacidades';
 import {
 	camposParaMapeador,
+	ColisaoComCampoDeSistema,
 	sistemaAceito,
 	sistemaAceitoNoRecurso,
 } from '../compartilhado/mapeador';
+import { comoErroDoNode } from '../compartilhado/transporte';
 
 /**
  * Os `resourceMapper` de campos definidos pela organizacao.
@@ -37,13 +40,36 @@ function deSistemaAceitos(ctx: ILoadOptionsFunctions, recurso: string): readonly
 	return operacao === '' ? sistemaAceitoNoRecurso(recurso) : sistemaAceito(recurso, operacao);
 }
 
+/**
+ * Converte o dicionario, traduzindo a colisao de slug em erro do node.
+ *
+ * `camposParaMapeador` e puro e levanta `ColisaoComCampoDeSistema` quando um
+ * campo do LAYOUT chega com o identificador de um campo de sistema
+ * (`dono_id`, `criado_em`...). Aceitar o campo mandaria o valor para o topo do
+ * corpo, gravando na coluna errada ou levando 422 sem explicacao — entao a
+ * lista nao e devolvida pela metade: o painel mostra o motivo e o nome do
+ * campo, e quem administra o CRM renomeia o slug.
+ */
+function converter(
+	ctx: ILoadOptionsFunctions,
+	campos: IDataObject[],
+	aceitos: readonly string[],
+): ResourceMapperFields {
+	try {
+		return { fields: camposParaMapeador(campos, { deSistemaAceitos: aceitos }) };
+	} catch (erro) {
+		if (erro instanceof ColisaoComCampoDeSistema) {
+			throw new NodeOperationError(ctx.getNode(), erro.message, {
+				description: `O Fluxo CRM reserva ${erro.slug} para um campo de sistema, que viaja no primeiro nivel do corpo e nao entre os campos personalizados. Renomeie o slug desse campo no layout do modulo, em Configuracoes › Modulos, para o mapeador poder distinguir os dois.`,
+			});
+		}
+		throw comoErroDoNode(ctx, erro, 'conversao do dicionario de campos');
+	}
+}
+
 function mapeadorDe(slug: string, recurso: string) {
 	return async function (this: ILoadOptionsFunctions): Promise<ResourceMapperFields> {
-		return {
-			fields: camposParaMapeador(await camposDoModulo(this, slug), {
-				deSistemaAceitos: deSistemaAceitos(this, recurso),
-			}),
-		};
+		return converter(this, await camposDoModulo(this, slug), deSistemaAceitos(this, recurso));
 	};
 }
 
@@ -78,9 +104,5 @@ export async function mapearCamposDoModulo(
 		};
 	}
 
-	return {
-		fields: camposParaMapeador(await camposDoModulo(this, slug), {
-			deSistemaAceitos: deSistemaAceitos(this, 'registro'),
-		}),
-	};
+	return converter(this, await camposDoModulo(this, slug), deSistemaAceitos(this, 'registro'));
 }

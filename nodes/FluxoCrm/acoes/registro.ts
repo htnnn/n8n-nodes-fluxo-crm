@@ -2,7 +2,7 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosDeCampo, filtrosSimples } from '../compartilhado/filtros';
-import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
 	aplicarNoTopo,
@@ -140,7 +140,8 @@ export async function executarRegistro(
 			const mapeado = valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
 			if (mapeado !== undefined) recusarAtalhoDeDono(ctx, mapeado, i);
 			const envelope = envelopeDeEscrita(ctx, i, mapeado, {
-				aceitos: sistemaAceito('registro', 'criar'),
+				recurso: 'registro',
+				operacao: 'criar',
 			});
 
 			// O servidor exige a chave `valores`, mesmo que vazia.
@@ -178,7 +179,8 @@ export async function executarRegistro(
 			const mapeado = valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
 			if (mapeado !== undefined) recusarAtalhoDeDono(ctx, mapeado, i);
 			const envelope = envelopeDeEscrita(ctx, i, mapeado, {
-				aceitos: sistemaAceito('registro', 'atualizar'),
+				recurso: 'registro',
+				operacao: 'atualizar',
 				orientacao:
 					'Este PATCH aceita a equipe no topo do corpo, mas nao o dono — trocar de dono e outra operacao. Tire "Dono" do mapeador de campos.',
 			});

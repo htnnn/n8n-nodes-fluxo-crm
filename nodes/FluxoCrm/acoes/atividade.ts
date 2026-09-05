@@ -2,7 +2,7 @@ import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-wor
 import { NodeOperationError } from 'n8n-workflow';
 
 import { filtrosSimples } from '../compartilhado/filtros';
-import { sistemaAceito, valoresDoMapeador } from '../compartilhado/mapeador';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
 	cabecalhoDeIdempotencia,
@@ -27,7 +27,8 @@ const ORIENTACAO_DE_SISTEMA =
 /** Le o `resourceMapper` de campos personalizados, sem campo de sistema. */
 function dadosDaAtividade(ctx: IExecuteFunctions, i: number, operacao: string): IDataObject | undefined {
 	return envelopeDeEscrita(ctx, i, valoresDoMapeador(ctx.getNodeParameter('dados', i, {})), {
-		aceitos: sistemaAceito('atividade', operacao),
+		recurso: 'atividade',
+		operacao,
 		orientacao: ORIENTACAO_DE_SISTEMA,
 	}).blob;
 }

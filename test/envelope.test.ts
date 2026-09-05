@@ -171,6 +171,46 @@ describe('registro: dono e equipe do mapeador vao para o topo do corpo', () => {
 		expect(chamadas).toHaveLength(0);
 	});
 
+	it('criar: Dono vazio e RECUSADO antes da requisicao — `dono_id` nao e nullable no schema', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			moduloSlug: 'imoveis',
+			valores: mapeado({ titulo: 'Casa', dono_id: null }),
+			additionalFields: {},
+			options: {},
+		});
+
+		await expect(executarRegistro(ctx, 'criar', 0)).rejects.toMatchObject({
+			message: expect.stringContaining('"Registro › Criar" nao aceita vazio'),
+			description: expect.stringContaining('opcional, mas NAO anulavel'),
+		});
+		expect(chamadas).toHaveLength(0);
+	});
+
+	it('atualizar: Equipe vazia PASSA ao topo — `equipe_id` e `.nullable()` no schema', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			moduloSlug: 'imoveis',
+			registroId: REGISTRO,
+			valores: mapeado({ equipe_id: null }),
+			equipe_id: '',
+		});
+
+		await executarRegistro(ctx, 'atualizar', 0);
+		expect(chamadas).toHaveLength(1);
+		expect(chamadas[0].corpo).toEqual({ valores: {}, equipe_id: null });
+	});
+
+	it('criar: Equipe vazia tambem passa; so o Dono e recusado, e a mensagem nomeia os dois', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			moduloSlug: 'imoveis',
+			valores: mapeado({ titulo: 'Casa', equipe_id: null }),
+			additionalFields: {},
+			options: {},
+		});
+
+		await executarRegistro(ctx, 'criar', 0);
+		expect(chamadas[0].corpo).toEqual({ valores: { titulo: 'Casa' }, equipe_id: null });
+	});
+
 	it('o UUID do campo de sistema e conferido aqui: a API devolve 404 para malformado', async () => {
 		const { ctx, chamadas } = criarContextoDeExecucao({
 			moduloSlug: 'imoveis',
@@ -293,6 +333,54 @@ describe('negocio e atividade: so o que a rota aceita', () => {
 			description: expect.stringContaining('nao a equipe'),
 		});
 		expect(comEquipe.chamadas).toHaveLength(0);
+	});
+
+	it('negocio: Dono vazio e recusado em Criar e em Criar ou Atualizar, sem chamada', async () => {
+		const criar = criarContextoDeExecucao({
+			pipeline_id: EQUIPE,
+			valores: mapeado({ valor: 100, dono_id: null }),
+			contato: {},
+			etiquetas: [],
+			etiquetasNovas: '',
+			options: {},
+		});
+		await expect(executarNegocio(criar.ctx, 'criar', 0)).rejects.toMatchObject({
+			message: expect.stringContaining('"Negocio › Criar" nao aceita vazio'),
+		});
+		expect(criar.chamadas).toHaveLength(0);
+
+		const upsert = criarContextoDeExecucao({
+			contato: { telefone: '11999999999' },
+			pipeline: {},
+			estagio: {},
+			valores: mapeado({ dono_id: null }),
+			options: {},
+		});
+		await expect(executarNegocio(upsert.ctx, 'criarOuAtualizar', 0)).rejects.toMatchObject({
+			message: expect.stringContaining('"Negocio › Criar ou Atualizar" nao aceita vazio'),
+			description: expect.stringContaining('dono_id'),
+		});
+		expect(upsert.chamadas).toHaveLength(0);
+	});
+
+	it('contato e empresa: responsavel vazio PASSA — os dois schemas sao `.nullable()`', async () => {
+		const contato = criarContextoDeExecucao({
+			contatoId: REGISTRO,
+			updateFields: {},
+			dados: mapeado({ responsavel_id: null }),
+			options: {},
+		});
+		await executarContato(contato.ctx, 'atualizar', 0);
+		expect(contato.chamadas[0].corpo).toEqual({ responsavel_id: null });
+
+		const empresa = criarContextoDeExecucao({
+			nome: 'Acme',
+			additionalFields: {},
+			dados: mapeado({ responsavel_id: null }),
+			options: {},
+		});
+		await executarEmpresa(empresa.ctx, 'criar', 0);
+		expect(empresa.chamadas[0].corpo).toEqual({ nome: 'Acme', responsavel_id: null });
 	});
 
 	it('negocio atualizar nao aceita campo de sistema nenhum', async () => {
@@ -444,5 +532,24 @@ describe('o mapper oferece o campo de sistema so onde a operacao o aceita', () =
 			criarContextoDeOpcoes({ moduloSlug: 'imoveis' }, antigo).ctx,
 		);
 		expect(opcoes.map((opcao) => opcao.value)).toEqual(['titulo', 'valor']);
+	});
+
+	it('slug de layout colidindo com campo de sistema vira erro do node, com o que fazer', async () => {
+		const comColisao: IDataObject[] = [
+			{ slug: 'titulo', nome: 'Titulo', tipo: 'texto', obrigatorio: true, sistema: false },
+			// Slug DECLARADO no seed do modulo: o gerador nunca produziria este
+			// nome, mas `campo.slug ?? gerarSlug(nome)` deixa passar o que veio.
+			{ slug: 'dono_id', nome: 'Dono do imovel', tipo: 'texto', obrigatorio: false, sistema: false },
+		];
+
+		await expect(
+			mapearCamposDoModulo.call(
+				criarContextoDeOpcoes({ moduloSlug: 'imoveis', operation: 'criar' }, comColisao).ctx,
+			),
+		).rejects.toMatchObject({
+			name: 'NodeOperationError',
+			message: expect.stringContaining('dono_id'),
+			description: expect.stringContaining('Configuracoes › Modulos'),
+		});
 	});
 });
