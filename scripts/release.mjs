@@ -31,7 +31,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import { notasDaVersao, promoverNaoPublicado, versoesRegistradas } from './changelog.mjs';
 
@@ -96,10 +96,13 @@ function lerPackage() {
 /**
  * Resolve o alvo a partir do tipo pedido.
  *
+ * Exportada para `test/release-versao.test.mjs` — a aritmetica de semver e o
+ * unico pedaco deste arquivo que da para cobrir sem git nem rede.
+ *
  * @param {string} pedido `patch`, `minor`, `major` ou uma versao literal
  * @param {string} atual  versao do package.json
  */
-function resolverVersao(pedido, atual) {
+export function resolverVersao(pedido, atual) {
 	const partes = /^(\d+)\.(\d+)\.(\d+)$/.exec(atual);
 	if (!partes) abortar(`A versao atual do package.json nao e um semver simples: "${atual}".`);
 	const [maior, menor, correcao] = partes.slice(1).map(Number);
@@ -111,13 +114,24 @@ function resolverVersao(pedido, atual) {
 			return `${maior}.${menor + 1}.0`;
 		case 'patch':
 			return `${maior}.${menor}.${correcao + 1}`;
-		default:
+		default: {
 			if (!/^\d+\.\d+\.\d+$/.test(pedido)) {
 				abortar(
 					`Tipo invalido: "${pedido}". Use \`patch\`, \`minor\`, \`major\` ou uma versao \`X.Y.Z\`.`,
 				);
 			}
+			// Versoes do npm sao imutaveis e a ordem e monotonica: publicar um
+			// numero menor que o atual deixa o `latest` apontando para tras.
+			const pedidas = pedido.split('.').map(Number);
+			const atuais = [maior, menor, correcao];
+			for (let i = 0; i < 3; i++) {
+				if (pedidas[i] > atuais[i]) break;
+				if (pedidas[i] < atuais[i]) {
+					abortar(`A versao pedida (${pedido}) e menor que a atual (${atual}).`);
+				}
+			}
 			return pedido;
+		}
 	}
 }
 
@@ -363,12 +377,19 @@ function principal() {
 	console.log(cor.ok(`\nRelease ${tag} concluida.\n`));
 }
 
-try {
-	principal();
-} catch (erro) {
-	if (erro instanceof ErroDeRelease) {
-		console.error(cor.erro(`\nRelease abortada: ${erro.message}\n`));
-		process.exit(1);
+// Só corre quando o arquivo é o programa. Importado (pelos testes), o módulo
+// apenas expõe as funções puras.
+const EXECUTADO_DIRETO =
+	process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (EXECUTADO_DIRETO) {
+	try {
+		principal();
+	} catch (erro) {
+		if (erro instanceof ErroDeRelease) {
+			console.error(cor.erro(`\nRelease abortada: ${erro.message}\n`));
+			process.exit(1);
+		}
+		throw erro;
 	}
-	throw erro;
 }

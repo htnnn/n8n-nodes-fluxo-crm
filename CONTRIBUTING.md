@@ -279,8 +279,10 @@ devDependencies. Foi descartada porque arrastaria mais de uma centena de pacotes
 transitivos para um projeto cuja identidade é não ter dependência nenhuma — e
 este repositório acabou de gastar quatro execuções de CI brigando com
 instabilidade de resolução de árvore. `scripts/release.mjs` usa só builtins do
-Node, `git` e `gh`, e a parte que transforma texto está coberta por testes em
-`test/changelog.test.mjs`.
+Node, `git` e `gh`, e as duas partes puras estão cobertas por testes:
+`test/changelog.test.mjs` (transformação do CHANGELOG, inclusive contra o
+arquivo real deste repositório) e `test/release-versao.test.mjs` (aritmética do
+semver, inclusive a recusa de um número menor que o atual).
 
 O `prepublishOnly: n8n-node prerelease` foi **mantido**: é uma guarda barata que
 faz `npm publish` avulso sair com código 1.
