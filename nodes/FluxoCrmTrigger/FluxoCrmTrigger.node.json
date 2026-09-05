@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-fluxo-crm.fluxoCrmTrigger",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Sales", "Development"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#credencial"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#gatilho-fluxo-crm-trigger"
+			}
+		]
+	}
+}

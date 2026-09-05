@@ -39,7 +39,8 @@
 			"dist/credentials/FluxoCrmApi.credentials.js"
 		],
 		"nodes": [
-			"dist/nodes/FluxoCrm/FluxoCrm.node.js"
+			"dist/nodes/FluxoCrm/FluxoCrm.node.js",
+			"dist/nodes/FluxoCrmTrigger/FluxoCrmTrigger.node.js"
 		]
 	},
 	"devDependencies": {
