@@ -1,0 +1,8 @@
+# core.autocrlf=true nesta maquina faria o checkout gravar CRLF, e o prettier
+# deste pacote exige LF (endOfLine: "lf") — o `--check` reprovaria num clone
+# novo sem ninguem ter mudado uma linha. Fixar o final de linha no repositorio
+# resolve para qualquer clone, em qualquer sistema.
+* text=auto eol=lf
+
+*.svg text eol=lf
+*.png binary
