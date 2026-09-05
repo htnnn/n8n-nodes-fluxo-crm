@@ -104,20 +104,23 @@ export async function estadoDeEscopos(ctx: ContextoDeRequisicao): Promise<Estado
 		carimbo: credenciais.escoposDaChave,
 		fontes: {
 			buscarCapacidades: async () => {
-				let payload: IDataObject | null;
+				let tentativa: TentativaDoAgregado;
 				try {
-					payload = await buscarCapacidades(ctx, impressao);
+					tentativa = await tentarCapacidades(ctx, impressao);
 				} catch (erro) {
 					const falha = classificarFalhaDeDescoberta(erro, '/capabilities');
 					falhas.push(falha);
 					throw falha;
 				}
-				if (payload === null) {
-					const falha = endpointAusente('/capabilities');
+				if (tentativa.payload === null) {
+					// A falha REAL, e nao um 404 presumido: um 500 no agregado que
+					// virasse "endpoint ausente" faria o diagnostico final acusar
+					// "instancia desatualizada" por uma rota que existe.
+					const falha = tentativa.falha ?? endpointAusente('/capabilities');
 					falhas.push(falha);
 					throw falha;
 				}
-				return payload;
+				return tentativa.payload;
 			},
 			buscarContexto: async () => {
 				try {
@@ -145,24 +148,40 @@ export async function estadoDeEscopos(ctx: ContextoDeRequisicao): Promise<Estado
 	return estado;
 }
 
+/** O desfecho de uma tentativa do agregado — payload ou o motivo de nao haver um. */
+interface TentativaDoAgregado {
+	/** O agregado, ou `null` quando ele nao pode servir esta chamada. */
+	payload: IDataObject | null;
+	/** Por que veio `null`. `undefined` so quando veio payload. */
+	falha: ErroDeDescoberta | undefined;
+}
+
 /**
  * Busca (uma vez por credencial, por minuto) o agregado `/capabilities`.
  *
- * `null` significa "esta instancia nao tem o endpoint" (404) — e a resposta e
- * memorizada tambem nesse caso, para nao pagar um 404 por dropdown aberto.
+ * Tres desfechos, um por classe de falha:
  *
- * Qualquer outra falha sobe como `ErroDeDescoberta`, com o motivo, e NAO e
- * memorizada: credencial recusada e rede fora sao passageiras, e guardar
- * `null` por um minuto faria todo dropdown seguinte pular para o endpoint
- * individual — que falharia igual, so que com a frase generica.
+ * - `endpoint_ausente` (404): esta instancia nao tem o endpoint. Devolve `null`
+ *   e MEMORIZA, para nao pagar um 404 por dropdown aberto;
+ * - `resposta_inesperada` (5xx, 429, qualquer outro status): devolve `null` sem
+ *   memorizar, para o endpoint individual tentar. Um 500 passageiro no agregado
+ *   nao pode derrubar os cinco dropdowns que tem rota propria — e o agregado
+ *   existe por economia de requisicoes, nao por ser a unica fonte. Se o
+ *   individual tambem falhar, quem sobe e o erro DELE;
+ * - `credencial_recusada`, `sem_permissao`, `conectividade`: sobe tipado, sem
+ *   memorizar. Aqui o endpoint individual falharia igual, so que com a frase
+ *   generica — tentar de novo so troca uma mensagem boa por uma ruim.
  */
-async function buscarCapacidades(
+async function tentarCapacidades(
 	ctx: ContextoDeRequisicao,
 	impressao: string,
-): Promise<IDataObject | null> {
+): Promise<TentativaDoAgregado> {
 	const entrada = capacidadesEmCache.get(impressao);
 	if (entrada !== undefined && entrada.expiraEm > Date.now()) {
-		return entrada.payload;
+		return {
+			payload: entrada.payload,
+			falha: entrada.payload === null ? endpointAusente('/capabilities') : undefined,
+		};
 	}
 
 	try {
@@ -170,12 +189,18 @@ async function buscarCapacidades(
 		const payload =
 			typeof resposta.corpo === 'object' && resposta.corpo !== null ? resposta.corpo : null;
 		guardarCapacidades(impressao, payload);
-		return payload;
+		return {
+			payload,
+			falha: payload === null ? endpointAusente('/capabilities') : undefined,
+		};
 	} catch (erro) {
 		const falha = classificarFalhaDeDescoberta(erro, '/capabilities');
-		if (falha.motivo !== 'endpoint_ausente') throw falha;
-		guardarCapacidades(impressao, null);
-		return null;
+		if (falha.motivo === 'endpoint_ausente') {
+			guardarCapacidades(impressao, null);
+			return { payload: null, falha };
+		}
+		if (falha.motivo === 'resposta_inesperada') return { payload: null, falha };
+		throw falha;
 	}
 }
 
@@ -203,19 +228,21 @@ export function blocoOmitido(agregado: IDataObject | null, bloco: string): boole
  * etiquetas), preferindo o agregado e caindo para o endpoint individual.
  *
  * Todos os `loadOptions` de descoberta passam por aqui, e a queda para o
- * endpoint individual acontece em tres casos, nesta ordem:
+ * endpoint individual acontece em quatro casos, nesta ordem:
  *
- * 1. a instancia nao tem `/capabilities` (agregado `null`);
- * 2. o bloco esta em `blocos_omitidos` — a lista vazia dali NAO e resposta;
- * 3. ha `query` a aplicar (o recorte `?modulo_id=` das etiquetas, por exemplo):
+ * 1. a instancia nao tem `/capabilities` (404, agregado `null`);
+ * 2. o agregado respondeu 5xx ou 429 — passageiro, e o bloco tem rota propria;
+ * 3. o bloco esta em `blocos_omitidos` — a lista vazia dali NAO e resposta;
+ * 4. ha `query` a aplicar (o recorte `?modulo_id=` das etiquetas, por exemplo):
  *    o agregado traz sempre a lista inteira e filtrar aqui reimplementaria uma
  *    regra do servidor.
  *
- * Falhas: credencial recusada e rede sobem do proprio `/capabilities`, tipadas
- * (`ErroDeDescoberta`) — o endpoint individual falharia igual. O 404 do
- * endpoint individual, quando o agregado tambem nao existia, vira "instancia
- * desatualizada" nomeando as duas rotas; os demais status do individual sobem
- * como sempre, com a descricao do codigo da API que `erroDaApi` ja da.
+ * Falhas: credencial recusada, falta de permissao e rede sobem do proprio
+ * `/capabilities`, tipadas (`ErroDeDescoberta`) — o endpoint individual
+ * falharia igual. O 404 do endpoint individual, quando o agregado tambem nao
+ * existia, vira "instancia desatualizada" nomeando as duas rotas; os demais
+ * status do individual sobem como sempre, com a descricao do codigo da API que
+ * `erroDaApi` ja da.
  */
 export async function listaDeDescoberta(
 	ctx: ContextoDeRequisicao,
@@ -227,8 +254,10 @@ export async function listaDeDescoberta(
 
 	if (!temRecorte) {
 		const impressao = await impressaoDoContexto(ctx);
-		const agregado = await buscarCapacidades(ctx, impressao);
-		agregadoAusente = agregado === null;
+		const { payload: agregado, falha } = await tentarCapacidades(ctx, impressao);
+		// So o 404 conta como "a instancia nao tem o agregado". Um 500 nao pode
+		// virar meia prova de "instancia desatualizada" no diagnostico final.
+		agregadoAusente = falha?.motivo === 'endpoint_ausente';
 
 		if (!blocoOmitido(agregado, bloco)) {
 			const doAgregado = agregado?.[bloco];

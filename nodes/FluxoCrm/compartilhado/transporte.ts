@@ -200,19 +200,63 @@ function detalhesLegiveis(envelope: EnvelopeDeErro | null): string {
 }
 
 /**
+ * O erro cru que um `NodeApiError` do n8n embrulhou.
+ *
+ * `NodeError` guarda um `Error` em `cause` e qualquer outro objeto em
+ * `errorResponse` (`n8n-workflow/dist/cjs/errors/abstract/node.error.js`,
+ * l.38-48: `const options = isError ? { cause: error } : { errorResponse: error }`).
+ * Em producao `httpRequestWithAuthentication` levanta SEMPRE um `NodeApiError`
+ * embrulhando o `AxiosError` do transporte, entao o envelope
+ * `{erro: {codigo, mensagem}}` da API mora em `cause.response.data` — nunca no
+ * primeiro nivel do erro que chega aqui.
+ *
+ * `undefined` quando nao ha nada por baixo: ai nao ha envelope para ler.
+ */
+function cruDoNodeApiError(erro: NodeApiError): unknown {
+	const raiz = erro as unknown as { cause?: unknown; errorResponse?: unknown };
+	for (const camada of [raiz.cause, raiz.errorResponse]) {
+		if (camada === undefined || camada === null) continue;
+		// Reembrulho (`NodeApiError` de `NodeApiError`) nao acrescenta envelope.
+		if (camada instanceof NodeApiError) continue;
+		return camada;
+	}
+	return undefined;
+}
+
+/** O status que o `NodeApiError` ja tinha, quando o cru nao carrega nenhum. */
+function statusDoEmbrulho(erro: NodeApiError | undefined): number | undefined {
+	if (erro === undefined || typeof erro.httpCode !== 'string') return undefined;
+	const numero = Number(erro.httpCode);
+	return Number.isFinite(numero) ? numero : undefined;
+}
+
+/**
  * Traduz o erro da API para um `NodeApiError` com descricao acionavel.
  *
  * Sempre pelo `erro.codigo`, NUNCA pela `mensagem`: a mensagem e em pt-BR e a
  * propria especificacao avisa que ela muda sem aviso.
+ *
+ * O erro chega em DUAS formas. Nos testes e nos helpers puros ele e o objeto
+ * cru (`{statusCode, response: {body}}`); em execucao real ele ja vem
+ * embrulhado num `NodeApiError` pelo proprio n8n. Ate 05/09/2026 o
+ * `NodeApiError` era devolvido intacto aqui, e o `switch` abaixo — que e a
+ * unica coisa que transforma `escopo_insuficiente` em "gere uma chave com o
+ * escopo exigido" — NUNCA rodava em chamada real. Agora o cru e escavado de
+ * dentro dele e a descricao e reconstruida.
  */
 export function erroDaApi(
 	ctx: ContextoDeRequisicao,
 	erro: unknown,
 	contexto?: string,
 ): NodeApiError {
-	if (erro instanceof NodeApiError) return erro;
+	const embrulho = erro instanceof NodeApiError ? erro : undefined;
+	const cru = embrulho === undefined ? erro : cruDoNodeApiError(embrulho);
+	// `NodeApiError` sem nada por baixo: trocar a mensagem dele por um generico
+	// nosso perderia informacao em vez de acrescentar.
+	if (embrulho !== undefined && cru === undefined) return embrulho;
 
-	const { erro: envelope, status, cabecalhos } = extrairEnvelope(erro);
+	const { erro: envelope, status: statusDoCru, cabecalhos } = extrairEnvelope(cru);
+	const status = statusDoCru ?? statusDoEmbrulho(embrulho);
 	const codigo = typeof envelope?.codigo === 'string' ? envelope.codigo : '';
 	const mensagemDaApi =
 		typeof envelope?.mensagem === 'string' && envelope.mensagem !== ''
@@ -287,7 +331,10 @@ export function erroDaApi(
 
 	const mensagem = contexto === undefined ? mensagemDaApi : `${mensagemDaApi} (${contexto})`;
 
-	return new NodeApiError(ctx.getNode(), erro as JsonObject, {
+	// `cru`, e nao `erro`: o construtor do `NodeApiError` DEVOLVE o argumento
+	// intacto quando ele ja e um `NodeApiError` (`node-api.error.js`, l.81-87),
+	// entao reconstruir a partir do embrulho descartaria a descricao acima.
+	return new NodeApiError(ctx.getNode(), cru as JsonObject, {
 		message: mensagem,
 		description: descricao,
 		httpCode: status === undefined ? undefined : String(status),

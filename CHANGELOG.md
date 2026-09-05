@@ -74,6 +74,23 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   (`dono_id`, `criado_em`…) quando a API os devolve: o servidor confere o slug
   do filtro contra o layout e recusava com 422. Dono e datas já têm filtro
   próprio na mesma lista.
+- **A descrição acionável de cada código de erro da API voltou a aparecer.** Em
+  execução real o n8n entrega o erro embrulhado num `NodeApiError` (com o erro
+  do transporte em `cause`), e o node o devolvia intacto: o envelope
+  `{erro: {codigo}}` nunca era lido, e todo o mapa de códigos —
+  `escopo_insuficiente` → "gere uma chave com o escopo exigido",
+  `idempotencia_conflito`, `ip_nao_permitido`, `validacao` com os campos
+  recusados — ficava sem uso. O que chegava ao painel era a frase genérica do
+  n8n ("Forbidden - perhaps check your credentials?"). Agora o envelope é
+  escavado de dentro do embrulho e a descrição é remontada pelo código, com o
+  `Retry-After` do 429 quando o servidor o envia.
+- **5xx e 429 em `/v1/capabilities` deixam de derrubar os cinco dropdowns de
+  descoberta.** Usuários, equipes, módulos, pipelines e etiquetas têm rota
+  própria, e o agregado existe por economia de requisições: uma falha passageira
+  nele agora cai para a rota do bloco em vez de subir. Se a rota própria também
+  falhar, quem sobe é o erro dela. O 5xx não é memorizado (a abertura seguinte
+  do painel tenta o agregado de novo) e não conta mais como prova de "instância
+  desatualizada" no diagnóstico.
 
 ### Limitações conhecidas
 

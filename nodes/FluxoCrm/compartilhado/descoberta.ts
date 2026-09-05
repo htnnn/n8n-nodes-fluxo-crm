@@ -122,6 +122,15 @@ export function classificarFalhaDeDescoberta(erro: unknown, rota: string): ErroD
 		);
 	}
 
+	if (status === 429) {
+		return new ErroDeDescoberta(
+			'resposta_inesperada',
+			[rota],
+			429,
+			`A API do Fluxo CRM recusou ${onde} por excesso de requisicoes (HTTP 429${detalhe}). O limite e POR CHAVE de API (padrao: 120 por minuto), entao ele conta tambem o que outros fluxos e outras instancias do n8n fazem com a mesma chave. Aguarde e tente de novo, ou use uma chave propria para este ambiente.`,
+		);
+	}
+
 	return new ErroDeDescoberta(
 		'resposta_inesperada',
 		[rota],
