@@ -1,12 +1,21 @@
 name: Publicar no npm
 
-# Publica via OIDC Trusted Publishing: o runner troca o token OIDC do GitHub
-# por uma credencial efemera no npm. Nao existe NPM_TOKEN neste repositorio, e
-# nao deve existir — o segredo de longa duracao e justamente o que o trusted
-# publishing elimina.
+# Este workflow e o unico caminho de publicacao do pacote. Ele dispara quando um
+# GitHub Release e publicado — e quem cria esse Release e `npm run release`,
+# descrito em CONTRIBUTING.md.
 #
-# Antes do primeiro uso, o dono do pacote precisa cadastrar este workflow como
-# publicador confiavel em npmjs.com (veja a secao "Publicacao" do README).
+# Autenticacao, nos dois momentos da vida do pacote:
+#
+#   1. PRIMEIRA publicacao. O Trusted Publishing do npm so pode ser configurado
+#      num pacote que JA EXISTE no registro, entao a versao que cria o nome
+#      precisa de autenticacao normal. O caminho recomendado e publicar da
+#      maquina do dono (`npm login` + `npm publish`); se preferir passar por
+#      aqui, cadastre o secret `NPM_TOKEN` — o passo abaixo o detecta sozinho.
+#
+#   2. DA SEGUNDA EM DIANTE. Com o publicador confiavel cadastrado em
+#      npmjs.com, o runner troca o token OIDC do GitHub por uma credencial
+#      efemera. APAGUE o secret `NPM_TOKEN` depois da primeira publicacao: o
+#      segredo de longa duracao e exatamente o que o trusted publishing elimina.
 
 on:
   release:
@@ -22,6 +31,11 @@ jobs:
       id-token: write # obrigatorio para o OIDC e para a proveniencia
       contents: read
 
+    env:
+      # `secrets` nao pode ser lido direto num `if:` de step, entao a presenca do
+      # token vira uma variavel de ambiente aqui.
+      TEM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -32,6 +46,12 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+
+      # Antes de qualquer coisa cara: a tag, o package.json e o CHANGELOG
+      # precisam falar da mesma versao. Publicar com eles em desacordo grava no
+      # npm um numero que ninguem pode mais corrigir.
+      - name: Confere versao, CHANGELOG e ausencia de dependencies
+        run: node scripts/conferir-release.mjs "${{ github.event.release.tag_name }}"
 
       - name: Atualiza o npm
         # Trusted publishing exige npm >= 11.5.1; o npm que vem com o Node 22 e
@@ -44,6 +64,10 @@ jobs:
         # com a do lock gerado em outra versao.
         run: npm install --no-audit --no-fund
 
+      # As catracas rodam de novo aqui, e nao so no CI, porque o commit que vira
+      # release pode nao ser o mesmo que o CI verificou (uma tag pode ser movida,
+      # um release pode ser criado a mao sobre outro commit). Publicar codigo
+      # quebrado e pior que nao publicar.
       - name: Lint
         run: npm run lint
 
@@ -56,7 +80,27 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publica
-        # Sem NODE_AUTH_TOKEN de proposito. O npm detecta o ambiente OIDC pelo
-        # `id-token: write` e gera a proveniencia sozinho.
+      - name: Publica (OIDC — Trusted Publishing)
+        if: env.TEM_TOKEN != 'true'
+        # Sem NODE_AUTH_TOKEN de proposito: o npm detecta o ambiente OIDC pelo
+        # `id-token: write`. RELEASE_MODE e obrigatorio porque o `prepublishOnly`
+        # deste pacote (`n8n-node prerelease`) sai com codigo 1 sem ele — a
+        # guarda existe para barrar `npm publish` avulso, e aqui a publicacao e
+        # justamente a deliberada.
+        env:
+          RELEASE_MODE: 'true'
+          NPM_CONFIG_PROVENANCE: 'true'
         run: npm publish --access public
+
+      - name: Publica (NPM_TOKEN — so para a primeira publicacao)
+        if: env.TEM_TOKEN == 'true'
+        env:
+          RELEASE_MODE: 'true'
+          NPM_CONFIG_PROVENANCE: 'true'
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Lembrete
+        if: env.TEM_TOKEN == 'true'
+        run: |
+          echo "::warning::A publicacao usou NPM_TOKEN. Cadastre o publicador confiavel em npmjs.com e APAGUE esse secret — da proxima vez o OIDC assume."
