@@ -1,34 +1,20 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
+import { filtrosDeCampo, filtrosSimples } from '../compartilhado/filtros';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista } from '../compartilhado/transporte';
 import {
 	cabecalhoDeIdempotencia,
-	ehUuid,
 	emailNormalizado,
 	exigirUuid,
 	idDoLocalizador,
+	itemDeSaida as item,
 	listaDeEtiquetas,
-	objetoDeJson,
+	objeto,
 	propagarAvisos,
 	semIndefinidos,
 } from '../compartilhado/utilitarios';
-
-/** Operadores que castam o valor no Postgres — texto aqui vira 500, nao 422. */
-const OPERADORES_NUMERICOS = ['maior', 'menor', 'maior_igual', 'menor_igual'];
-const OPERADORES_DE_DATA = ['antes', 'depois'];
-/** Estes dois ignoram o valor, e tratam 0 e false como preenchidos. */
-const OPERADORES_SEM_VALOR = ['vazio', 'nao_vazio'];
-
-function objeto(valor: unknown): IDataObject {
-	return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
-		? (valor as IDataObject)
-		: {};
-}
-
-function item(json: IDataObject, i: number): INodeExecutionData {
-	return { json, pairedItem: { item: i } };
-}
 
 /**
  * Le o bloco `contato`, saneando o e-mail e conferindo o UUID.
@@ -85,61 +71,9 @@ function etiquetasDoItem(ctx: IExecuteFunctions, i: number): string[] | undefine
 	return listaDeEtiquetas([...(Array.isArray(escolhidas) ? escolhidas : []), novas]);
 }
 
-/**
- * Traduz os filtros por campo para `campo:{slug}[operador]=valor`.
- *
- * Duas guardas locais, ambas por causa de comportamento medido do servidor:
- * o operador precisa ir em minusculas (maiuscula passa na regex e falha na
- * comparacao, com 422), e comparacao numerica ou de data com valor de outro
- * tipo estoura o cast do Postgres e volta como 500 `erro_interno`.
- */
-function filtrosDeCampo(ctx: IExecuteFunctions, i: number): IDataObject {
-	const bruto = objeto(ctx.getNodeParameter('filtrosDeCampo', i, {}));
-	const criterios = Array.isArray(bruto.criterios) ? (bruto.criterios as IDataObject[]) : [];
-	const query: IDataObject = {};
-
-	for (const criterio of criterios) {
-		const slug = typeof criterio.slug === 'string' ? criterio.slug.trim() : '';
-		if (slug === '') continue;
-
-		const operador = (
-			typeof criterio.operador === 'string' ? criterio.operador : 'igual'
-		).toLowerCase();
-		const valor = criterio.valor;
-
-		if (OPERADORES_SEM_VALOR.includes(operador)) {
-			query[`campo:${slug}[${operador}]`] = '';
-			continue;
-		}
-
-		const texto = typeof valor === 'string' ? valor.trim() : String(valor ?? '');
-
-		if (OPERADORES_NUMERICOS.includes(operador) && !Number.isFinite(Number(texto))) {
-			throw new NodeOperationError(
-				ctx.getNode(),
-				`O filtro "${slug}" usa a comparacao "${operador}" com um valor que nao e numero`,
-				{
-					description: `Recebido: ${JSON.stringify(texto)}. Comparacao numerica com texto estoura o cast no banco e a API devolve 500, nao 422 — por isso o node confere antes de enviar.`,
-					itemIndex: i,
-				},
-			);
-		}
-
-		if (OPERADORES_DE_DATA.includes(operador) && Number.isNaN(new Date(texto).getTime())) {
-			throw new NodeOperationError(
-				ctx.getNode(),
-				`O filtro "${slug}" usa a comparacao "${operador}" com um valor que nao e data`,
-				{
-					description: `Recebido: ${JSON.stringify(texto)}. Comparacao de data com texto invalido estoura o cast no banco e a API devolve 500, nao 422.`,
-					itemIndex: i,
-				},
-			);
-		}
-
-		query[`campo:${slug}[${operador}]`] = texto;
-	}
-
-	return query;
+/** Le o `resourceMapper` de `valores`, que e alimentado pelo modulo `negocios`. */
+function valoresDoModulo(ctx: IExecuteFunctions, i: number): IDataObject | undefined {
+	return valoresDoMapeador(ctx.getNodeParameter('valores', i, {}));
 }
 
 /**
@@ -169,26 +103,12 @@ export async function executarNegocio(
 		case 'listar': {
 			const retornarTudo = ctx.getNodeParameter('returnAll', i, false) as boolean;
 			const limite = ctx.getNodeParameter('limit', i, 50) as number;
-			const filtros = objeto(ctx.getNodeParameter('filters', i, {}));
 
-			const query: IDataObject = {};
-			for (const [chave, valor] of Object.entries(filtros)) {
-				if (valor === undefined || valor === '' || valor === null) continue;
-				if (chave.endsWith('_id') && !ehUuid(valor)) {
-					throw new NodeOperationError(
-						ctx.getNode(),
-						`O filtro "${chave}" nao recebeu um UUID valido`,
-						{
-							description:
-								'A API devolve 404 (e nao 422) para identificador malformado em filtro, entao a conferencia acontece aqui.',
-							itemIndex: i,
-						},
-					);
-				}
-				query[chave] = chave === 'contato_email' ? emailNormalizado(valor) : valor;
-			}
+			const query = filtrosSimples(ctx, 'filters', i, (chave, valor) =>
+				chave === 'contato_email' ? emailNormalizado(valor) : valor,
+			);
 
-			Object.assign(query, filtrosDeCampo(ctx, i));
+			Object.assign(query, filtrosDeCampo(ctx, 'filtrosDeCampo', i));
 
 			const condicao = ctx.getNodeParameter('condicao', i, 'e') as string;
 			if (Object.keys(query).some((chave) => chave.startsWith('campo:'))) {
@@ -231,8 +151,7 @@ export async function executarNegocio(
 					i,
 				),
 				// O servidor exige a chave `valores`, mesmo que vazia.
-				valores:
-					objetoDeJson(ctx, ctx.getNodeParameter('valores', i, '{}'), 'Valores do Modulo', i) ?? {},
+				valores: valoresDoModulo(ctx, i) ?? {},
 				contato: blocoDeContato(ctx, i),
 				etiquetas: etiquetasDoItem(ctx, i),
 				dono_id:
@@ -267,12 +186,7 @@ export async function executarNegocio(
 			const id = idDoLocalizador(ctx, 'negocioId', 'negocio', i);
 			// Aqui `valores` faz MERGE no servidor — o oposto de `dados` de contato.
 			const corpo: IDataObject = {
-				valores: objetoDeJson(
-					ctx,
-					ctx.getNodeParameter('valores', i, '{}'),
-					'Valores do Modulo',
-					i,
-				),
+				valores: valoresDoModulo(ctx, i),
 				contato: blocoDeContato(ctx, i),
 				etiquetas: etiquetasDoItem(ctx, i),
 			};
@@ -300,12 +214,7 @@ export async function executarNegocio(
 				contato: blocoDeContato(ctx, i),
 				pipeline: referenciaDeFunil(ctx, 'pipeline', 'pipeline', i),
 				estagio: referenciaDeFunil(ctx, 'estagio', 'estagio', i),
-				valores: objetoDeJson(
-					ctx,
-					ctx.getNodeParameter('valores', i, '{}'),
-					'Valores do Modulo',
-					i,
-				),
+				valores: valoresDoModulo(ctx, i),
 				papel: typeof opcoes.papel === 'string' && opcoes.papel !== '' ? opcoes.papel : undefined,
 				dono_id:
 					typeof opcoes.dono_id === 'string' && opcoes.dono_id !== ''

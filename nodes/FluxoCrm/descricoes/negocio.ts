@@ -8,28 +8,11 @@ import {
 	localizadorDeRegistro,
 	opcaoDeIdempotencia,
 } from './comuns';
+import { OPCOES_DE_OPERADOR } from './operadores';
 
 const RECURSO = 'negocio';
 
 const OPERACOES_COM_ID = ['obter', 'atualizar', 'excluir', 'mover', 'marcarGanho', 'marcarPerdido'];
-
-/** Os 14 operadores aceitos em `campo:{slug}[operador]`. */
-const OPERADORES_DE_CAMPO: INodeProperties['options'] = [
-	{ name: 'Antes De', value: 'antes' },
-	{ name: 'Comeca Com', value: 'comeca_com' },
-	{ name: 'Contem', value: 'contem' },
-	{ name: 'Depois De', value: 'depois' },
-	{ name: 'Diferente De', value: 'nao_igual' },
-	{ name: 'Esta Vazio', value: 'vazio' },
-	{ name: 'Igual A', value: 'igual' },
-	{ name: 'Maior Ou Igual', value: 'maior_igual' },
-	{ name: 'Maior Que', value: 'maior' },
-	{ name: 'Menor Ou Igual', value: 'menor_igual' },
-	{ name: 'Menor Que', value: 'menor' },
-	{ name: 'Nao Contem', value: 'nao_contem' },
-	{ name: 'Nao Esta Vazio', value: 'nao_vazio' },
-	{ name: 'Termina Com', value: 'termina_com' },
-];
 
 const blocoDeContato: INodeProperties = {
 	displayName: 'Contato',
@@ -248,7 +231,7 @@ export const descricaoDoNegocio: INodeProperties[] = [
 						displayName: 'Operador',
 						name: 'operador',
 						type: 'options',
-						options: OPERADORES_DE_CAMPO,
+						options: OPCOES_DE_OPERADOR,
 						default: 'igual',
 						description: 'Comparacao aplicada ao valor do campo',
 					},
@@ -337,15 +320,27 @@ export const descricaoDoNegocio: INodeProperties[] = [
 	},
 
 	{
+		// `resourceMapper` e nao `json`: a obrigatoriedade vem do layout da
+		// organizacao, e so o mapper a le em tempo de edicao. Ver a nota no
+		// cabecalho de `compartilhado/mapeador.ts`.
 		displayName: 'Valores do Módulo',
 		name: 'valores',
-		type: 'json',
-		default: '{}',
+		type: 'resourceMapper',
+		default: { mappingMode: 'defineBelow', value: null },
 		displayOptions: {
 			show: { resource: [RECURSO], operation: ['criar', 'atualizar', 'criarOuAtualizar'] },
 		},
+		typeOptions: {
+			resourceMapper: {
+				resourceMapperMethod: 'mapearCamposDeNegocio',
+				mode: 'add',
+				fieldWords: { singular: 'campo', plural: 'campos' },
+				addAllFields: false,
+				supportAutoMap: true,
+			},
+		},
 		description:
-			'Objeto com os campos do modulo de negocios, chaveado pelo slug de cada campo. Slug desconhecido e descartado em silencio pelo servidor.',
+			'Campos do modulo de negocios, lidos do layout desta organizacao. Slug desconhecido e descartado em silencio pelo servidor.',
 	},
 
 	{

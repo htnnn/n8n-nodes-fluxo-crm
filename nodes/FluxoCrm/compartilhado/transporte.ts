@@ -316,7 +316,8 @@ export interface OpcoesDeLista extends OpcoesDeRequisicao {
 	itemIndex: number;
 }
 
-function extrairDados(corpo: unknown): IDataObject[] {
+/** Le o array `dados` do envelope de lista, sem confiar na forma da resposta. */
+export function extrairDados(corpo: unknown): IDataObject[] {
 	const raiz = comoObjeto(corpo);
 	if (raiz === null) return [];
 	return Array.isArray(raiz.dados) ? (raiz.dados as IDataObject[]) : [];

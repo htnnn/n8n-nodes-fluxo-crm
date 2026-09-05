@@ -214,10 +214,14 @@ export function extrairEscoposDeMe(resposta: unknown): string[] | null {
 /**
  * Extrai a lista de escopos de `GET /capabilities`.
  *
- * A forma exata do endpoint NAO esta verificada — ele estava sendo criado
- * quando este node foi escrito. Por isso aceitamos os tres formatos plausiveis
- * (`escopos` na raiz, `chave.escopos` como em `/me`, ou `escopos.concedidos`) e
- * devolvemos `null` quando nenhum casa, o que empurra o fluxo para o fallback.
+ * A forma REAL foi conferida no handler (`api-publica/rotas/meta.ts`): o
+ * agregado reusa `identidadeDaChave`, o mesmo bloco de `/me`, entao os escopos
+ * chegam em `chave.escopos` — o segundo ramo daqui.
+ *
+ * Os outros dois ramos (`escopos` na raiz e `escopos.concedidos`) continuam por
+ * tolerancia a instancias que sirvam outra forma; custam uma comparacao e
+ * evitam que uma variacao de servidor derrube a descoberta inteira. Quando
+ * nenhum casa, devolvemos `null` e o fluxo cai para `/me`.
  */
 export function extrairEscoposDeCapacidades(resposta: unknown): string[] | null {
 	const raiz = comoObjeto(resposta);

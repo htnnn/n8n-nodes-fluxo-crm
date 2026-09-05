@@ -1,15 +1,19 @@
 import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
+import { filtrosSimples } from '../compartilhado/filtros';
+import { valoresDoMapeador } from '../compartilhado/mapeador';
 import { requisitar, requisitarLista, requisitarListaSimples } from '../compartilhado/transporte';
 import {
 	cabecalhoDeIdempotencia,
 	emailNormalizado,
 	idDoLocalizador,
+	itemDeSaida as item,
 	listaDeEtiquetas,
 	listaDeTexto,
-	objetoDeJson,
+	objeto,
 	propagarAvisos,
+	secaoUnica,
 	semIndefinidos,
 } from '../compartilhado/utilitarios';
 
@@ -18,18 +22,6 @@ const IDENTIFICADORES = ['nome', 'email', 'telefone', 'cpf', 'instagram'];
 
 /** Campos do corpo que sao listas, e chegam da interface como texto separado por virgula. */
 const CAMPOS_DE_LISTA = ['emails', 'telefones', 'instagrams'];
-
-function objeto(valor: unknown): IDataObject {
-	return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
-		? (valor as IDataObject)
-		: {};
-}
-
-/** Le a secao unica de um `fixedCollection` de item unico. */
-function secaoUnica(ctx: IExecuteFunctions, nome: string, i: number): IDataObject {
-	const bruto = objeto(ctx.getNodeParameter(nome, i, {}));
-	return objeto(bruto.campos);
-}
 
 /**
  * Monta o corpo a partir da colecao de campos da interface.
@@ -91,12 +83,7 @@ async function dadosParaGravar(
 	i: number,
 	contatoId?: string,
 ): Promise<IDataObject | undefined> {
-	const informado = objetoDeJson(
-		ctx,
-		ctx.getNodeParameter('dados', i, '{}'),
-		'Campos Personalizados',
-		i,
-	);
+	const informado = valoresDoMapeador(ctx.getNodeParameter('dados', i, {}));
 	if (informado === undefined) return undefined;
 
 	const opcoes = objeto(ctx.getNodeParameter('options', i, {}));
@@ -108,10 +95,6 @@ async function dadosParaGravar(
 	return { ...anteriores, ...informado };
 }
 
-function item(json: IDataObject, i: number): INodeExecutionData {
-	return { json, pairedItem: { item: i } };
-}
-
 export async function executarContato(
 	ctx: IExecuteFunctions,
 	operacao: string,
@@ -121,18 +104,10 @@ export async function executarContato(
 		case 'listar': {
 			const retornarTudo = ctx.getNodeParameter('returnAll', i, false) as boolean;
 			const limite = ctx.getNodeParameter('limit', i, 50) as number;
-			const filtros = objeto(ctx.getNodeParameter('filters', i, {}));
 
-			const query: IDataObject = {};
-			for (const [chave, valor] of Object.entries(filtros)) {
-				if (valor === undefined || valor === '' || valor === null) continue;
-				if (chave === 'email') {
-					const email = emailNormalizado(valor);
-					if (email !== undefined) query.email = email;
-					continue;
-				}
-				query[chave] = valor;
-			}
+			const query = filtrosSimples(ctx, 'filters', i, (chave, valor) =>
+				chave === 'email' ? emailNormalizado(valor) : valor,
+			);
 
 			const dados = await requisitarLista(ctx, {
 				metodo: 'GET',

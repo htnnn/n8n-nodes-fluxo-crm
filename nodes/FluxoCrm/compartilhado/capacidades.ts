@@ -16,6 +16,31 @@ import { NOME_DA_CREDENCIAL, requisitar, type ContextoDeRequisicao } from './tra
 const TTL_DAS_CAPACIDADES_MS = 60 * 1000;
 const TETO_DE_CAPACIDADES = 500;
 
+/**
+ * Os blocos de dado da organizacao que o agregado devolve, e o endpoint
+ * individual de cada um.
+ *
+ * Forma conferida contra o handler (`api-publica/rotas/meta.ts`, `/capabilities`):
+ *
+ * ```
+ * { chave, ator, organizacao, modulos, pipelines, usuarios, equipes,
+ *   etiquetas, catalogo, blocos_omitidos, versao }
+ * ```
+ *
+ * `camposDeContato` e `camposDeNegocio` NAO existem la — o dicionario de campos
+ * continua saindo so por `GET /modulos/{slug}/campos`, e quem precisa dele nao
+ * passa por este mapa.
+ */
+export const BLOCOS_DO_AGREGADO = {
+	modulos: '/modulos',
+	pipelines: '/pipelines',
+	usuarios: '/usuarios',
+	equipes: '/equipes',
+	etiquetas: '/etiquetas',
+} as const;
+
+export type BlocoDoAgregado = keyof typeof BLOCOS_DO_AGREGADO;
+
 interface EntradaDeCapacidades {
 	payload: IDataObject | null;
 	expiraEm: number;
@@ -46,6 +71,10 @@ async function impressaoDoContexto(ctx: ContextoDeRequisicao): Promise<string> {
  *
  * Fail-open por construcao: se `/capabilities` e `/me` falharem, devolve
  * "escopos desconhecidos" e nenhuma operacao e marcada com cadeado.
+ *
+ * As duas rotas deixaram de exigir escopo, mas o fallback para `/me` continua:
+ * uma instancia com API anterior a essa mudanca ainda devolve 404 em
+ * `/capabilities`, e uma anterior ainda devolve 403 em `/me`.
  */
 export async function estadoDeEscopos(ctx: ContextoDeRequisicao): Promise<EstadoDeEscopos> {
 	const credenciais = await ctx.getCredentials(NOME_DA_CREDENCIAL);
@@ -95,32 +124,77 @@ async function buscarCapacidades(
 }
 
 /**
- * Devolve uma lista de descoberta (pipelines, usuarios, equipes, etiquetas...),
- * preferindo o agregado e caindo para o endpoint individual.
+ * `true` quando o agregado declarou que NAO pode mostrar aquele bloco.
  *
- * Todos os `loadOptions` passam por aqui: quando `/capabilities` entrar no ar,
- * a migracao e uma linha, nao uma reescrita.
+ * O handler responde 200 sempre. Quando a chave nao tem `meta:ler`, os blocos
+ * de dado da organizacao voltam como lista VAZIA e o nome de cada um aparece em
+ * `blocos_omitidos`. Sem ler esse campo, uma chave sem `meta:ler` produziria
+ * dropdowns vazios indistinguiveis de "esta organizacao nao tem usuario nenhum"
+ * — que e exatamente a conclusao errada que o campo existe para evitar.
  *
- * ATENCAO: os nomes de chave dentro do agregado (`pipelines`, `usuarios`,
- * `etiquetas`, `camposDeNegocio`, `camposDeContato`) sao uma APOSTA — o
- * endpoint estava sendo escrito quando este node foi feito, e a forma real e
- * NAO VERIFICADA. Por isso a leitura e guardada por `Array.isArray` e cai para
- * o endpoint individual quando a chave nao existe: uma aposta errada custa uma
- * requisicao a mais, nunca um dropdown vazio.
+ * O endpoint individual tambem vai recusar (ele exige `meta:ler`), mas recusa
+ * com 403 `escopo_insuficiente`, que sobe como erro nomeado em vez de virar
+ * silencio.
+ */
+export function blocoOmitido(agregado: IDataObject | null, bloco: string): boolean {
+	if (agregado === null) return false;
+	const omitidos = agregado.blocos_omitidos;
+	return Array.isArray(omitidos) && (omitidos as unknown[]).includes(bloco);
+}
+
+/**
+ * Devolve uma lista de descoberta (modulos, pipelines, usuarios, equipes,
+ * etiquetas), preferindo o agregado e caindo para o endpoint individual.
+ *
+ * Todos os `loadOptions` de descoberta passam por aqui, e a queda para o
+ * endpoint individual acontece em tres casos, nesta ordem:
+ *
+ * 1. a instancia nao tem `/capabilities` (agregado `null`);
+ * 2. o bloco esta em `blocos_omitidos` — a lista vazia dali NAO e resposta;
+ * 3. ha `query` a aplicar (o recorte `?modulo_id=` das etiquetas, por exemplo):
+ *    o agregado traz sempre a lista inteira e filtrar aqui reimplementaria uma
+ *    regra do servidor.
  */
 export async function listaDeDescoberta(
 	ctx: ContextoDeRequisicao,
-	chaveNoAgregado: string,
-	caminhoIndividual: string,
+	bloco: BlocoDoAgregado,
 	query?: IDataObject,
 ): Promise<IDataObject[]> {
-	const impressao = await impressaoDoContexto(ctx);
-	const agregado = await buscarCapacidades(ctx, impressao);
+	const temRecorte = query !== undefined && Object.keys(query).length > 0;
 
-	const doAgregado = agregado?.[chaveNoAgregado];
-	if (Array.isArray(doAgregado)) return doAgregado as IDataObject[];
+	if (!temRecorte) {
+		const impressao = await impressaoDoContexto(ctx);
+		const agregado = await buscarCapacidades(ctx, impressao);
 
-	const resposta = await requisitar(ctx, { metodo: 'GET', caminho: caminhoIndividual, query });
+		if (!blocoOmitido(agregado, bloco)) {
+			const doAgregado = agregado?.[bloco];
+			if (Array.isArray(doAgregado)) return doAgregado as IDataObject[];
+		}
+	}
+
+	const resposta = await requisitar(ctx, {
+		metodo: 'GET',
+		caminho: BLOCOS_DO_AGREGADO[bloco],
+		query,
+	});
+	const corpo = resposta.corpo as IDataObject;
+	return Array.isArray(corpo?.dados) ? (corpo.dados as IDataObject[]) : [];
+}
+
+/**
+ * O dicionario de campos de um modulo.
+ *
+ * Nao passa pelo agregado: `/capabilities` nao carrega campo nenhum, e nem
+ * poderia — o dicionario e por modulo e a organizacao pode ter dezenas.
+ */
+export async function camposDoModulo(
+	ctx: ContextoDeRequisicao,
+	slug: string,
+): Promise<IDataObject[]> {
+	const resposta = await requisitar(ctx, {
+		metodo: 'GET',
+		caminho: `/modulos/${encodeURIComponent(slug)}/campos`,
+	});
 	const corpo = resposta.corpo as IDataObject;
 	return Array.isArray(corpo?.dados) ? (corpo.dados as IDataObject[]) : [];
 }

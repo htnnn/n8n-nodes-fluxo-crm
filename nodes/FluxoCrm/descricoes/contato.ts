@@ -394,12 +394,26 @@ export const descricaoDoContato: INodeProperties[] = [
 	},
 
 	{
+		// `resourceMapper` e nao `json`: a obrigatoriedade de cada campo vem do
+		// LAYOUT da organizacao, entao o mesmo corpo devolve 201 numa org e 422
+		// noutra. So o mapper mostra o `required` real, em tempo de edicao e na
+		// org daquela credencial.
 		displayName: 'Campos Personalizados',
 		name: 'dados',
-		type: 'json',
-		default: '{}',
+		type: 'resourceMapper',
+		default: { mappingMode: 'defineBelow', value: null },
 		displayOptions: { show: { resource: [RECURSO], operation: OPERACOES_DE_ESCRITA } },
-		description: 'Objeto com os campos personalizados do modulo, chaveado pelo slug de cada campo',
+		typeOptions: {
+			resourceMapper: {
+				resourceMapperMethod: 'mapearCamposDeContato',
+				mode: 'add',
+				fieldWords: { singular: 'campo personalizado', plural: 'campos personalizados' },
+				addAllFields: false,
+				supportAutoMap: true,
+			},
+		},
+		description:
+			'Campos personalizados do modulo Contatos, lidos do layout desta organizacao. Este conjunto SUBSTITUI o anterior; veja o aviso acima.',
 	},
 
 	{

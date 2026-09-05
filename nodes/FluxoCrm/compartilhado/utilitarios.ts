@@ -1,5 +1,85 @@
-import type { IDataObject, IExecuteFunctions } from 'n8n-workflow';
+import type { IDataObject, IExecuteFunctions, INodeExecutionData } from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
+
+/** Um objeto plano, ou `{}` para qualquer outra coisa. */
+export function objeto(valor: unknown): IDataObject {
+	return typeof valor === 'object' && valor !== null && !Array.isArray(valor)
+		? (valor as IDataObject)
+		: {};
+}
+
+/** Uma string, ou `''` para qualquer outra coisa. */
+export function texto(valor: unknown): string {
+	return typeof valor === 'string' ? valor : '';
+}
+
+/**
+ * Um item de saida com `pairedItem`.
+ *
+ * Sempre por aqui: sem `pairedItem`, o n8n perde o rastro de qual entrada
+ * produziu qual saida e as expressoes `$('No').item` do resto do workflow param
+ * de resolver.
+ */
+export function itemDeSaida(json: IDataObject, i: number): INodeExecutionData {
+	return { json, pairedItem: { item: i } };
+}
+
+/**
+ * Le uma `collection` da interface e devolve o corpo, sem as chaves vazias.
+ *
+ * String vazia e descartada porque a interface do n8n produz `''` para todo
+ * campo que o usuario acrescentou e nao preencheu — mandar isso viraria
+ * "grave string vazia", que quase nunca e a intencao. Quem quiser limpar um
+ * campo usa uma expressao com `null`, que passa.
+ */
+export function corpoDaColecao(
+	ctx: IExecuteFunctions,
+	nome: string,
+	i: number,
+	transformar?: (chave: string, valor: unknown) => unknown,
+): IDataObject {
+	const colecao = objeto(ctx.getNodeParameter(nome, i, {}));
+	const corpo: IDataObject = {};
+
+	for (const [chave, bruto] of Object.entries(colecao)) {
+		if (bruto === undefined || bruto === '') continue;
+		const valor = transformar === undefined ? bruto : transformar(chave, bruto);
+		if (valor === undefined || valor === '') continue;
+		corpo[chave] = valor as IDataObject[string];
+	}
+
+	return corpo;
+}
+
+/** Le os itens de um `fixedCollection` de multiplos valores. */
+export function itensDaColecao(ctx: IExecuteFunctions, nome: string, i: number): IDataObject[] {
+	const bruto = objeto(ctx.getNodeParameter(nome, i, {}));
+	return Array.isArray(bruto.itens) ? (bruto.itens as IDataObject[]) : [];
+}
+
+/** Le a secao unica de um `fixedCollection` de item unico. */
+export function secaoUnica(ctx: IExecuteFunctions, nome: string, i: number): IDataObject {
+	return objeto(objeto(ctx.getNodeParameter(nome, i, {})).campos);
+}
+
+/**
+ * Le o slug do modulo e recusa o que a API nao aceitaria no path.
+ *
+ * O slug entra na URL, entao um valor com barra montaria outra rota — e a
+ * mensagem de erro seria sobre uma rota que o usuario nao pediu.
+ */
+export function slugDoModulo(ctx: IExecuteFunctions, nome: string, i: number): string {
+	const bruto = texto(ctx.getNodeParameter(nome, i, '')).trim();
+
+	if (bruto === '' || !/^[a-z0-9][a-z0-9_-]*$/i.test(bruto)) {
+		throw new NodeOperationError(ctx.getNode(), 'O slug do modulo nao e valido', {
+			description: `Recebido: ${JSON.stringify(bruto)}. Informe o slug como aparece em "Listar Modulos" (por exemplo negocios, contatos ou tarefas).`,
+			itemIndex: i,
+		});
+	}
+
+	return bruto;
+}
 
 /**
  * A mesma regex que a API usa (`api-publica/rotas/comum.ts`).
@@ -119,44 +199,6 @@ export function semIndefinidos(objeto: IDataObject): IDataObject {
 		if (valor !== undefined) saida[chave] = valor;
 	}
 	return saida;
-}
-
-/**
- * Le um campo `json` da interface e devolve um objeto plano.
- *
- * Aceita tanto o objeto ja resolvido por expressao quanto o texto digitado.
- */
-export function objetoDeJson(
-	ctx: IExecuteFunctions,
-	valor: unknown,
-	rotulo: string,
-	itemIndex: number,
-): IDataObject | undefined {
-	if (valor === undefined || valor === null || valor === '') return undefined;
-
-	let candidato: unknown = valor;
-	if (typeof valor === 'string') {
-		const texto = valor.trim();
-		if (texto === '' || texto === '{}') return undefined;
-		try {
-			candidato = JSON.parse(texto);
-		} catch {
-			throw new NodeOperationError(ctx.getNode(), `${rotulo} nao e um JSON valido`, {
-				description: 'Informe um objeto JSON, por exemplo {"camiseta": "M"}',
-				itemIndex,
-			});
-		}
-	}
-
-	if (typeof candidato !== 'object' || candidato === null || Array.isArray(candidato)) {
-		throw new NodeOperationError(ctx.getNode(), `${rotulo} precisa ser um objeto JSON`, {
-			description: 'Listas e valores soltos nao sao aceitos neste campo',
-			itemIndex,
-		});
-	}
-
-	const objeto = candidato as IDataObject;
-	return Object.keys(objeto).length > 0 ? objeto : undefined;
 }
 
 /**

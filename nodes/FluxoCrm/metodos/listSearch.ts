@@ -46,6 +46,31 @@ export async function buscarContatos(
 }
 
 /**
+ * Busca de empresas para o modo "Da Lista".
+ *
+ * `GET /empresas` aceita `busca`, que faz ILIKE em nome **e website** — entao o
+ * filtro digitado vai direto ao servidor.
+ */
+export async function buscarEmpresas(
+	this: ILoadOptionsFunctions,
+	filtro?: string,
+): Promise<INodeListSearchResult> {
+	const query: IDataObject = { limite: LIMITE_DA_BUSCA };
+	if (filtro !== undefined && filtro.trim() !== '') query.busca = filtro.trim();
+
+	const resposta = await requisitar(this, { metodo: 'GET', caminho: '/empresas', query });
+
+	const resultados: INodeListSearchItems[] = dados(resposta.corpo)
+		.map((empresa) => ({
+			name: texto(empresa.nome) || texto(empresa.cnpj) || texto(empresa.id),
+			value: texto(empresa.id),
+		}))
+		.filter((item) => item.value !== '');
+
+	return { results: resultados };
+}
+
+/**
  * Busca de negocios para o modo "Da Lista".
  *
  * `GET /negocios` NAO aceita `busca` — os filtros dele sao por pipeline,
