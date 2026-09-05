@@ -91,6 +91,14 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
   falhar, quem sobe é o erro dela. O 5xx não é memorizado (a abertura seguinte
   do painel tenta o agregado de novo) e não conta mais como prova de "instância
   desatualizada" no diagnóstico.
+- **O dropdown de eventos de webhook não disfarça mais falha de verdade.** Ele
+  caía para a lista estática dos 34 eventos em QUALQUER falha de
+  `GET /v1/webhooks/eventos`, registrando o motivo só em log de depuração — com
+  a credencial recusada ou o servidor fora do ar, o painel abria normal, como
+  se estivesse tudo certo. A queda agora acontece só em **403** (chave sem
+  `webhooks:ler`, que é o caso legítimo) e **404** (instância anterior à rota);
+  401, 5xx, 429 e rede fora sobem como erro, com o motivo. Vale para o gatilho e
+  para `Webhook › Criar/Atualizar`.
 
 ### Limitações conhecidas
 

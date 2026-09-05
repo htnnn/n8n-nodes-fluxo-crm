@@ -1,6 +1,7 @@
 import type { INodePropertyOptions } from 'n8n-workflow';
 
-import { requisitar, type ContextoDeRequisicao } from './transporte';
+import { classificarFalhaDeDescoberta, type MotivoDaDescoberta } from './descoberta';
+import { comoErroDoNode, requisitar, type ContextoDeRequisicao } from './transporte';
 
 /**
  * Os eventos de webhook que o servidor sabe emitir, com o rotulo de cada um.
@@ -161,26 +162,44 @@ function texto(valor: unknown): string {
 	return typeof valor === 'string' ? valor : '';
 }
 
+/** A rota `/webhooks/eventos`, como ela aparece na credencial e na documentacao. */
+const ROTA_DE_EVENTOS = '/webhooks/eventos';
+
+/**
+ * As falhas em que a lista estatica E a resposta certa, e nao um disfarce.
+ *
+ * - `sem_permissao` (403): a chave e valida e pode REGISTRAR webhooks, so nao
+ *   pode LER o catalogo — `webhooks:ler` e `webhooks:escrever` sao escopos
+ *   independentes nesta API. Sem o fallback, essa chave perfeitamente util
+ *   abriria um `multiOptions` vazio, sem ter como assinar nada.
+ * - `endpoint_ausente` (404): instancia com API anterior a rota, ou URL base
+ *   sem o prefixo `/v1`. A lista estatica cobre os eventos que ela emite.
+ *
+ * Qualquer outro desfecho — 401, 5xx, 429, rede fora — NAO e um caso de
+ * fallback: e uma falha que o usuario precisa ver. Ate 05/09/2026 o `catch`
+ * engolia todos eles em `debug` e devolvia os 34 eventos, e o painel abria
+ * normal com uma credencial recusada ou o servidor fora do ar — a lista
+ * estatica virava um falso "esta tudo bem".
+ */
+const FALHAS_QUE_CAEM_NA_ESTATICA: ReadonlySet<MotivoDaDescoberta> = new Set([
+	'sem_permissao',
+	'endpoint_ausente',
+]);
+
 /**
  * Os eventos assinaveis, do servidor quando possivel.
  *
- * `GET /webhooks/eventos` exige `webhooks:ler`, e uma chave criada so para
- * REGISTRAR webhooks pode ter apenas `webhooks:escrever` — os dois escopos sao
- * independentes nesta API. Sem o fallback, essa chave perfeitamente valida
- * abriria um `multiOptions` vazio. A lista estatica cobre os eventos
- * conhecidos; a do servidor, quando vem, prevalece porque pode trazer eventos
- * que este pacote ainda nao conhece.
+ * A lista estatica cobre os eventos conhecidos; a do servidor, quando vem,
+ * prevalece porque pode trazer eventos que este pacote ainda nao conhece.
  *
- * A queda para a lista estatica e deliberada para QUALQUER falha da rota: um
- * dropdown e o lugar errado para reportar credencial recusada ou rede fora —
- * o teste de credencial e a execucao fazem isso com o motivo. O que a falha
- * foi fica no log de depuracao.
+ * Fonte unica dos DOIS loaders (o gatilho e `Webhook › Criar/Atualizar`), entao
+ * a regra de queda vale igual nos dois.
  */
 export async function opcoesDeEventosAssinaveis(
 	ctx: ContextoDeRequisicao,
 ): Promise<INodePropertyOptions[]> {
 	try {
-		const resposta = await requisitar(ctx, { metodo: 'GET', caminho: '/webhooks/eventos' });
+		const resposta = await requisitar(ctx, { metodo: 'GET', caminho: ROTA_DE_EVENTOS });
 		// Esta rota e a unica da API cujo `dados` traz STRINGS, e nao objetos.
 		const brutos = (resposta.corpo as { dados?: unknown }).dados;
 		if (Array.isArray(brutos)) {
@@ -195,10 +214,14 @@ export async function opcoesDeEventosAssinaveis(
 			'[Fluxo CRM] GET /webhooks/eventos respondeu sem lista; usando a lista estatica de eventos.',
 		);
 	} catch (erro) {
+		const falha = classificarFalhaDeDescoberta(erro, ROTA_DE_EVENTOS);
+		if (!FALHAS_QUE_CAEM_NA_ESTATICA.has(falha.motivo)) {
+			// `comoErroDoNode` devolve intacto o `NodeApiError` que `requisitar` ja
+			// montou, com a descricao acionavel do codigo que a API devolveu.
+			throw comoErroDoNode(ctx, erro, `GET ${ROTA_DE_EVENTOS}`);
+		}
 		ctx.logger.debug(
-			`[Fluxo CRM] GET /webhooks/eventos indisponivel (${
-				erro instanceof Error ? erro.message : String(erro)
-			}); usando a lista estatica de eventos.`,
+			`[Fluxo CRM] ${falha.message} Usando a lista estatica de eventos.`,
 		);
 	}
 

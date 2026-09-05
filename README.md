@@ -337,9 +337,15 @@ endereço público, use Sondagem.
 
 Os oito últimos (etiqueta, atendimento e automação) só existem em instâncias
 cuja API já tem os emissores de domínio — numa anterior, a assinatura é
-recusada com 422 nomeando o evento. A lista do dropdown vem do servidor quando
-a chave tem `webhooks:ler`; sem esse escopo, o node usa a lista estática acima,
-nos dois nodes.
+recusada com 422 nomeando o evento. A lista do dropdown vem do servidor
+(`GET /v1/webhooks/eventos`, que exige `webhooks:ler`). O node cai para a lista
+estática acima — nos dois nodes — em **dois** casos, e só neles: **403**, quando
+a chave só tem `webhooks:escrever` (os dois escopos são independentes, e uma
+chave criada só para registrar webhooks continua servindo), e **404**, quando a
+instância é anterior a essa rota. Qualquer outra falha — **401**, **5xx**,
+**429**, rede fora — **sobe como erro**, com o motivo: um dropdown preenchido
+seria um falso "está tudo bem" com a credencial recusada ou o servidor fora do
+ar.
 
 **Toda entrega é verificada.** O cabeçalho `X-Fluxo-Signature` traz
 `t=<unix>,v1=<hex>`, onde `v1 = HMAC_SHA256(segredo, "<t>.<corpo bruto>")`. A

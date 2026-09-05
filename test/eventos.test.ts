@@ -97,6 +97,15 @@ function recusarCom(status: number, codigo: string): () => IDataObject {
 	};
 }
 
+/** O que o helper levanta quando nao ha resposta HTTP nenhuma. */
+function semRede(): () => IDataObject {
+	return () => {
+		throw Object.assign(new Error('connect ECONNREFUSED 10.0.0.1:443'), {
+			code: 'ECONNREFUSED',
+		});
+	};
+}
+
 describe('a tabela de eventos', () => {
 	it('e exatamente EVENTOS_DISPONIVEIS do servidor, os 34, na mesma ordem', () => {
 		expect([...EVENTOS_CONHECIDOS]).toEqual(EVENTOS_DISPONIVEIS_NO_SERVIDOR);
@@ -202,6 +211,41 @@ describe('o fallback e o mesmo nos dois nodes', () => {
 			const { ctx } = criarContexto(() => ({ dados: [] }));
 			const opcoes = (await carregar.call(ctx)) as Array<{ value: string }>;
 			expect(opcoes).toHaveLength(35);
+		});
+
+		it(`${nome}: 404 (instancia sem a rota) tambem cai para os 34 eventos`, async () => {
+			const { ctx, avisos } = criarContexto(recusarCom(404, 'nao_encontrado'));
+			const opcoes = (await carregar.call(ctx)) as Array<{ value: string }>;
+
+			expect(opcoes).toHaveLength(35);
+			expect(opcoes.slice(1).map((opcao) => opcao.value)).toEqual(EVENTOS_DISPONIVEIS_NO_SERVIDOR);
+			expect(avisos.some((aviso) => aviso.includes('lista estatica'))).toBe(true);
+		});
+
+		it(`${nome}: 401 SOBE com credencial recusada, em vez de disfarcar de lista estatica`, async () => {
+			const { ctx } = criarContexto(recusarCom(401, 'chave_invalida'));
+
+			await expect(carregar.call(ctx)).rejects.toMatchObject({
+				httpCode: '401',
+				description: expect.stringContaining('chave_invalida'),
+			});
+		});
+
+		it(`${nome}: 500 SOBE nomeando o status — a lista estatica nao esconde servidor fora`, async () => {
+			const { ctx } = criarContexto(recusarCom(500, 'erro_interno'));
+
+			await expect(carregar.call(ctx)).rejects.toMatchObject({
+				httpCode: '500',
+				description: expect.stringContaining('erro interno'),
+			});
+		});
+
+		it(`${nome}: rede fora SOBE como conectividade, nao como lista estatica`, async () => {
+			const { ctx } = criarContexto(semRede());
+
+			await expect(carregar.call(ctx)).rejects.toMatchObject({
+				description: expect.stringContaining('conectividade'),
+			});
 		});
 	}
 });
