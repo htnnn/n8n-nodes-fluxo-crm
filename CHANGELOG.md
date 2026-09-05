@@ -12,6 +12,12 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Corrigido
+
+- O ícone dos dois nodes e da credencial agora é o logotipo oficial do Fluxo
+  (o "F" com gradiente azul), no tema claro e no escuro. A 0.1.0 saiu com um
+  ícone genérico de CPU herdado do template.
+
 ## [0.1.0] - 2026-09-05
 
 Primeira versão pública. O pacote entrega dois nodes e uma credencial para
