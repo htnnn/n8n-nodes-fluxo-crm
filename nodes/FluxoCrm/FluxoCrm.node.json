@@ -2,11 +2,11 @@
 	"node": "n8n-nodes-fluxo-crm.fluxoCrm",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": ["Sales", "Development"],
+	"categories": ["Sales", "Productivity"],
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#credentials"
+				"url": "https://github.com/fluxo/n8n-nodes-fluxo-crm?tab=readme-ov-file#credencial"
 			}
 		],
 		"primaryDocumentation": [
