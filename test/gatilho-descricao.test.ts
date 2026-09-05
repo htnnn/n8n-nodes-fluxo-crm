@@ -1,4 +1,4 @@
-import type { INodeProperties } from 'n8n-workflow';
+import type { INodeProperties, INodePropertyOptions } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 
 import { MARCA_DE_CADEADO } from '../nodes/FluxoCrm/compartilhado/catalogo';
@@ -9,6 +9,7 @@ import {
 	MODOS,
 	opcoesComEscopo,
 	opcoesDeEvento,
+	opcoesEstaticas,
 	RECURSOS_COM_ATUALIZACAO,
 	RECURSOS_SONDAVEIS,
 	encontrarRecursoSondavel,
@@ -141,23 +142,54 @@ describe('cadeado por escopo', () => {
 	};
 	const desconhecido: EstadoDeEscopos = { conhecidos: false, escopos: [], origem: 'indisponivel' };
 
-	it('marca o modo Webhook quando falta webhooks:escrever, sem tira-lo da lista', () => {
+	/** As TRES marcas do bloqueio, conferidas juntas — ver `motivoDeBloqueio`. */
+	function esperarBloqueada(opcao: INodePropertyOptions, escopo: string): void {
+		expect(opcao.disabled).toBe(true);
+		expect(opcao.name.startsWith(MARCA_DE_CADEADO)).toBe(true);
+		expect(opcao.description).toContain(escopo);
+	}
+
+	function esperarLiberada(opcao: INodePropertyOptions): void {
+		expect(opcao.disabled).toBeUndefined();
+		expect(opcao.name).not.toContain(MARCA_DE_CADEADO);
+		expect(opcao.description ?? '').not.toMatch(/Requer o escopo/);
+	}
+
+	it('o modo Webhook sem webhooks:escrever sai com disabled E cadeado E motivo', () => {
 		const opcoes = opcoesComEscopo(MODOS, semEscrita);
-		const webhook = opcoes.find((opcao) => opcao.value === 'webhook');
-		expect(webhook?.name.startsWith(MARCA_DE_CADEADO)).toBe(true);
-		expect(webhook?.description).toContain('webhooks:escrever');
-		// Sondagem nao exige escopo nenhum e continua limpa.
-		expect(opcoes.find((opcao) => opcao.value === 'polling')?.name).toBe('Sondagem Periodica');
+
+		esperarBloqueada(opcoes.find((opcao) => opcao.value === 'webhook')!, 'webhooks:escrever');
+		// Sondagem nao exige escopo nenhum e continua limpa das tres.
+		const polling = opcoes.find((opcao) => opcao.value === 'polling')!;
+		esperarLiberada(polling);
+		expect(polling.name).toBe('Sondagem Periodica');
+	});
+
+	it('o recurso sondavel sem atendimento:ler tambem sai com as tres', () => {
+		const opcoes = opcoesComEscopo(RECURSOS_SONDAVEIS, semEscrita);
+		esperarBloqueada(opcoes.find((opcao) => opcao.value === 'conversa')!, 'atendimento:ler');
 	});
 
 	it('nao marca nada quando a chave tem o escopo', () => {
-		const opcoes = opcoesComEscopo(MODOS, comEscrita);
-		expect(opcoes.every((opcao) => !opcao.name.startsWith(MARCA_DE_CADEADO))).toBe(true);
+		for (const opcao of opcoesComEscopo(MODOS, comEscrita)) esperarLiberada(opcao);
 	});
 
 	it('nao marca nada quando os escopos sao desconhecidos — fail-open', () => {
-		const opcoes = opcoesComEscopo(RECURSOS_SONDAVEIS, desconhecido);
-		expect(opcoes.every((opcao) => !opcao.name.startsWith(MARCA_DE_CADEADO))).toBe(true);
+		for (const opcao of opcoesComEscopo(RECURSOS_SONDAVEIS, desconhecido)) esperarLiberada(opcao);
+	});
+
+	it('as opcoes ESTATICAS do gatilho nunca levam disabled', () => {
+		for (const opcao of [...opcoesEstaticas(MODOS), ...opcoesEstaticas(RECURSOS_SONDAVEIS)]) {
+			expect(opcao.disabled).toBeUndefined();
+		}
+	});
+
+	it('as tres marcas sobrevivem a serializacao JSON do loadOptions', () => {
+		const viajadas = JSON.parse(
+			JSON.stringify(opcoesComEscopo(MODOS, semEscrita)),
+		) as INodePropertyOptions[];
+
+		esperarBloqueada(viajadas.find((opcao) => opcao.value === 'webhook')!, 'webhooks:escrever');
 	});
 
 	it('poe os itens ao alcance da chave antes dos bloqueados', () => {

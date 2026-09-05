@@ -1,7 +1,14 @@
-import type { IDataObject, IHookFunctions, IWebhookFunctions } from 'n8n-workflow';
+import type {
+	IDataObject,
+	IHookFunctions,
+	ILoadOptionsFunctions,
+	INodePropertyOptions,
+	IWebhookFunctions,
+} from 'n8n-workflow';
 import { createHmac } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MARCA_DE_CADEADO } from '../nodes/FluxoCrm/compartilhado/catalogo';
 import {
 	cacheDeEscopos,
 	ESTADO_DESCONHECIDO,
@@ -131,6 +138,30 @@ function criarContextoDeHook(opcoes: OpcoesDoContexto = {}): ContextoFalso {
 
 beforeEach(() => {
 	cacheDeEscopos.limpar();
+});
+
+describe('loadOptions — o caminho de verdade, do catalogo ate a resposta REST', () => {
+	it('carregarModos entrega o modo bloqueado com disabled, cadeado e motivo intactos', async () => {
+		// Este e o unico teste que passa pelo metodo registrado no node: se algum
+		// dia o node reconstruir a opcao (um `.map` de rotulo, por exemplo), o
+		// `disabled` cairia aqui e em lugar nenhum mais.
+		const { ctx } = criarContextoDeHook({ escopos: ['contatos:ler'] });
+
+		const opcoes = await node.methods.loadOptions.carregarModos.call(
+			ctx as unknown as ILoadOptionsFunctions,
+		);
+		// O JSON e o que o backend do n8n devolve ao front pela REST.
+		const viajadas = JSON.parse(JSON.stringify(opcoes)) as INodePropertyOptions[];
+		const webhook = viajadas.find((opcao) => opcao.value === 'webhook')!;
+
+		expect(webhook.disabled).toBe(true);
+		expect(webhook.name.startsWith(MARCA_DE_CADEADO)).toBe(true);
+		expect(webhook.description).toContain('webhooks:escrever');
+
+		const polling = viajadas.find((opcao) => opcao.value === 'polling')!;
+		expect(polling.disabled).toBeUndefined();
+		expect(polling.name).not.toContain(MARCA_DE_CADEADO);
+	});
 });
 
 describe('checkExists', () => {

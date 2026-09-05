@@ -145,22 +145,29 @@ própria descrição.
 
 ## Escopos e o cadeado 🔒
 
-Operação que a sua chave **não pode** executar continua na lista e continua
-selecionável, com cadeado no nome e o motivo logo abaixo:
+Operação que a sua chave **não pode** executar continua na lista, com cadeado no
+nome e o motivo logo abaixo:
 
 ```text
 🔒 Criar Contato
    Requer o escopo contatos:escrever — gere uma chave nova em Configurações › Integrações no Fluxo CRM
 ```
 
-Isso é deliberado, e a razão é do próprio n8n: o painel de **Actions** do node
-creator renderiza **antes** de existir qualquer credencial, então ele nunca
-consegue filtrar por escopo. Se o dropdown escondesse a operação, os dois se
-contradiriam — a operação existiria num lugar e sumiria no outro. Com o cadeado,
-as duas telas contam a mesma história.
+Ela também sai marcada com `disabled`. Em **n8n 2.x** isso é imposto pela
+interface: a linha fica cinza e o clique não troca o valor. Em **n8n 1.x** o
+campo é ignorado, e aí o cadeado é o único aviso — a opção segue selecionável.
+Os dois mecanismos coexistem de propósito: um cobre a versão em que o outro não
+funciona.
 
-Quem selecionar mesmo assim recebe, **na execução**, um erro dizendo qual escopo
-falta e onde consegui-lo — nunca o genérico `The value "x" is not supported!`.
+Manter a opção na lista é deliberado, e a razão é do próprio n8n: o painel de
+**Actions** do node creator renderiza **antes** de existir qualquer credencial,
+então ele nunca consegue filtrar por escopo. Se o dropdown escondesse a
+operação, os dois se contradiriam — a operação existiria num lugar e sumiria no
+outro. Com o cadeado, as duas telas contam a mesma história.
+
+Quem chegar à execução com uma operação sem escopo — pelo painel de Actions, por
+n8n 1.x ou por expressão — recebe um erro dizendo qual escopo falta e onde
+consegui-lo, nunca o genérico `The value "x" is not supported!`.
 
 > **O cadeado é da interface; a autorização real é do servidor.** O filtro
 > existe para orientar, não para proteger. Quem decide é o **403** da API. Se os

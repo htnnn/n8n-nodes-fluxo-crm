@@ -1,3 +1,4 @@
+import type { INodePropertyOptions } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -25,6 +26,27 @@ const DESCONHECIDOS: EstadoDeEscopos = {
 	escopos: [],
 	origem: 'indisponivel',
 };
+
+/**
+ * As TRES marcas do bloqueio, conferidas JUNTAS.
+ *
+ * Uma so nao basta: `disabled` e o que impede o clique em n8n 2.x e e ignorado
+ * em 1.x, o cadeado e o unico aviso visivel em 1.x, e a descricao e onde mora o
+ * escopo que falta. Conferir uma delas deixaria as outras duas regredirem em
+ * silencio.
+ */
+function esperarBloqueada(opcao: INodePropertyOptions, escopo: string): void {
+	expect(opcao.disabled).toBe(true);
+	expect(opcao.name.startsWith(MARCA_DE_CADEADO)).toBe(true);
+	expect(opcao.description).toContain(escopo);
+}
+
+/** A opcao liberada nao carrega NENHUMA das tres. */
+function esperarLiberada(opcao: INodePropertyOptions): void {
+	expect(opcao.disabled).toBeUndefined();
+	expect(opcao.name).not.toContain(MARCA_DE_CADEADO);
+	expect(opcao.description ?? '').not.toMatch(/Requer o escopo|Nenhuma operacao deste recurso/);
+}
 
 describe('catalogo', () => {
 	it('todo recurso tem uma operacao padrao que existe', () => {
@@ -66,29 +88,44 @@ describe('catalogo', () => {
 });
 
 describe('cadeado por escopo no dropdown remoto', () => {
-	it('a operacao sem escopo recebe CADEADO no nome E o motivo na descricao', () => {
+	it('a operacao sem escopo sai com disabled E cadeado no nome E o motivo na descricao', () => {
 		const opcoes = opcoesDeOperacaoComEscopo(contato, conhecidos(['contatos:ler']));
 		const criar = opcoes.find((opcao) => opcao.value === 'criar')!;
 
+		esperarBloqueada(criar, 'contatos:escrever');
 		expect(criar.name).toBe(`${MARCA_DE_CADEADO}Criar`);
-		expect(criar.description).toContain('contatos:escrever');
 		expect(criar.description).toMatch(/Requer o escopo/);
 	});
 
-	it('a operacao bloqueada CONTINUA na lista e continua selecionavel', () => {
+	it('TODA operacao bloqueada leva as tres marcas, em todos os recursos', () => {
+		for (const recurso of RECURSOS) {
+			const opcoes = opcoesDeOperacaoComEscopo(recurso, conhecidos(['contatos:ler']));
+			for (const opcao of opcoes) {
+				const definicao = recurso.operacoes.find((item) => item.valor === opcao.value)!;
+				if (operacaoPermitida(definicao, conhecidos(['contatos:ler']))) {
+					esperarLiberada(opcao);
+					continue;
+				}
+				esperarBloqueada(opcao, definicao.escopo as string);
+			}
+		}
+	});
+
+	it('a operacao bloqueada CONTINUA na lista, so que inselecionavel em 2.x', () => {
 		// Decisao de desenho: esconder fecharia o dropdown mas deixaria o painel
-		// de Actions oferecendo a mesma operacao sem aviso nenhum.
+		// de Actions oferecendo a mesma operacao sem aviso nenhum. Ela fica, com
+		// `disabled` para 2.x e cadeado para 1.x.
 		const opcoes = opcoesDeOperacaoComEscopo(contato, conhecidos(['contatos:ler']));
 		expect(opcoes).toHaveLength(contato.operacoes.length);
 		expect(opcoes.map((opcao) => opcao.value)).toContain('excluir');
 	});
 
-	it('a operacao permitida nao ganha cadeado nem motivo', () => {
+	it('a operacao permitida nao ganha NENHUMA das tres marcas', () => {
 		const opcoes = opcoesDeOperacaoComEscopo(contato, conhecidos(['contatos:ler']));
 		const listar = opcoes.find((opcao) => opcao.value === 'listar')!;
 
+		esperarLiberada(listar);
 		expect(listar.name).toBe('Listar');
-		expect(listar.description).not.toMatch(/Requer o escopo/);
 	});
 
 	it('as permitidas vem antes das bloqueadas, alfabeticas dentro de cada grupo', () => {
@@ -136,13 +173,34 @@ describe('cadeado por escopo no dropdown remoto', () => {
 		}
 	});
 
-	it('FAIL-OPEN: com escopos desconhecidos nada recebe cadeado', () => {
+	it('FAIL-OPEN: com escopos desconhecidos nada recebe cadeado NEM disabled', () => {
 		for (const recurso of RECURSOS) {
 			for (const opcao of opcoesDeOperacaoComEscopo(recurso, DESCONHECIDOS)) {
-				expect(opcao.name).not.toContain(MARCA_DE_CADEADO);
+				esperarLiberada(opcao);
 			}
 			expect(recurso.operacoes.every((op) => operacaoPermitida(op, DESCONHECIDOS))).toBe(true);
 		}
+	});
+
+	it('as opcoes ESTATICAS nunca levam disabled — o painel de Actions nao sabe de escopo', () => {
+		for (const recurso of RECURSOS) {
+			for (const opcao of opcoesEstaticasDeOperacao(recurso)) {
+				expect(opcao.disabled).toBeUndefined();
+			}
+		}
+		for (const opcao of opcoesEstaticasDeRecurso()) {
+			expect(opcao.disabled).toBeUndefined();
+		}
+	});
+
+	it('as tres marcas sobrevivem a serializacao JSON, que e como o loadOptions viaja', () => {
+		// O backend do n8n devolve o retorno do `loadOptions` por REST: se
+		// `disabled` nao sobrevivesse ao JSON, a interface nunca o veria.
+		const opcoes = opcoesDeOperacaoComEscopo(contato, conhecidos(['contatos:ler']));
+		const viajadas = JSON.parse(JSON.stringify(opcoes)) as INodePropertyOptions[];
+
+		esperarBloqueada(viajadas.find((opcao) => opcao.value === 'criar')!, 'contatos:escrever');
+		esperarLiberada(viajadas.find((opcao) => opcao.value === 'listar')!);
 	});
 });
 
@@ -157,17 +215,20 @@ describe('cadeado por escopo na lista de recursos', () => {
 		expect(nomePorValor.get('negocio')).toContain(MARCA_DE_CADEADO);
 	});
 
-	it('o recurso bloqueado nomeia os escopos envolvidos', () => {
+	it('o recurso bloqueado sai com as TRES marcas e nomeia os escopos envolvidos', () => {
 		const opcoes = opcoesDeRecursoComEscopo(conhecidos(['contatos:ler']));
 		const negocioBloqueado = opcoes.find((opcao) => opcao.value === 'negocio')!;
 
-		expect(negocioBloqueado.description).toContain('negocios:ler');
+		esperarBloqueada(negocioBloqueado, 'negocios:ler');
 		expect(negocioBloqueado.description).toContain('negocios:escrever');
+
+		// O recurso que ainda tem alguma operacao ao alcance nao leva nenhuma.
+		esperarLiberada(opcoes.find((opcao) => opcao.value === 'contato')!);
 	});
 
-	it('FAIL-OPEN tambem na lista de recursos', () => {
+	it('FAIL-OPEN tambem na lista de recursos: nem cadeado nem disabled', () => {
 		for (const opcao of opcoesDeRecursoComEscopo(DESCONHECIDOS)) {
-			expect(opcao.name).not.toContain(MARCA_DE_CADEADO);
+			esperarLiberada(opcao);
 		}
 	});
 });

@@ -859,12 +859,27 @@ export function encontrarOperacao(
 }
 
 /**
- * O motivo que aparece como linha secundaria sob o nome da operacao.
+ * O motivo que aparece como linha secundaria sob o nome da opcao bloqueada.
  *
- * `disabled: true` em `INodePropertyOptions` NAO funciona: o campo nao existe
- * no tipo e a interface o ignora por completo (medido no spike). O que funciona
- * e a `description`, que renderiza como linha cinza sob o nome — por isso o
- * motivo vive aqui e nao numa flag.
+ * A opcao bloqueada carrega TRES marcas, e a redundancia e deliberada porque
+ * cada versao do n8n honra um subconjunto diferente:
+ *
+ * - `disabled: true` — o campo EXISTE em `INodePropertyOptions` (n8n-workflow
+ *   2.37.4) e o backend o repassa intacto na resposta REST do `loadOptions`.
+ *   Em n8n 2.x a interface o impoe: a linha renderiza cinza
+ *   (`el-select-dropdown__item is-disabled`, `aria-disabled="true"`,
+ *   `cursor: not-allowed`) e o clique NAO troca o valor do parametro — medido
+ *   em 2.37.10 lendo o workflow salvo pela REST, nao o DOM. Em n8n 1.x o campo
+ *   e ignorado por completo: chega ao front e nada acontece com ele.
+ * - `MARCA_DE_CADEADO` no nome — funciona nas duas versoes, e e o unico aviso
+ *   visivel em 1.x, onde a opcao segue selecionavel.
+ * - Esta `description` — a linha cinza sob o nome, tambem nas duas versoes; e
+ *   onde cabe dizer qual escopo falta e onde gerar chave nova.
+ *
+ * Nenhuma delas e a defesa real: o painel de Actions do node creator escreve
+ * `operation` sem passar por dropdown nenhum, entao a execucao continua
+ * verificando o escopo e falhando com `NodeApiError`. As tres marcas so
+ * antecipam esse desfecho para quem ainda esta montando o node.
  */
 export function motivoDeBloqueio(escopo: string): string {
 	return `Requer o escopo ${escopo} — gere uma chave nova em Configuracoes › Integracoes no Fluxo CRM`;
@@ -894,11 +909,13 @@ export function opcoesEstaticasDeOperacao(recurso: RecursoDoCatalogo): INodeProp
 /**
  * Opcoes REMOTAS de operacao — as que o dropdown dentro do node le.
  *
- * A operacao que a chave nao pode executar CONTINUA na lista e CONTINUA
- * selecionavel, por decisao do fundador: esconde-la fecharia o dropdown mas
- * deixaria o painel de Actions oferecendo a mesma operacao sem aviso nenhum.
- * Ela ganha cadeado no nome e o motivo na descricao; se o usuario insistir, a
- * execucao falha com uma mensagem que diz qual escopo falta.
+ * A operacao que a chave nao pode executar CONTINUA na lista, por decisao do
+ * fundador: esconde-la fecharia o dropdown mas deixaria o painel de Actions
+ * oferecendo a mesma operacao sem aviso nenhum. Ela sai com `disabled: true`,
+ * cadeado no nome e o motivo na descricao — em 2.x fica cinza e inselecionavel,
+ * em 1.x segue selecionavel com o cadeado (ver `motivoDeBloqueio`). Se o valor
+ * chegar preenchido por outro caminho, a execucao falha dizendo qual escopo
+ * falta.
  *
  * Ordem: permitidas primeiro, bloqueadas depois; alfabetica dentro de cada grupo.
  */
@@ -925,6 +942,7 @@ export function opcoesDeOperacaoComEscopo(
 			value: operacao.valor,
 			action: operacao.acao,
 			description: motivoDeBloqueio(operacao.escopo as string),
+			disabled: true,
 		});
 	}
 
@@ -975,6 +993,7 @@ export function opcoesDeRecursoComEscopo(estado: EstadoDeEscopos): INodeProperty
 			name: `${MARCA_DE_CADEADO}${recurso.nome}`,
 			value: recurso.valor,
 			description: `Nenhuma operacao deste recurso esta ao alcance da chave. Escopos envolvidos: ${escoposFaltantes}.`,
+			disabled: true,
 		});
 	}
 

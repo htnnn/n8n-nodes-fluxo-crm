@@ -283,9 +283,11 @@ export function opcoesEstaticas(itens: ItemComEscopo[]): INodePropertyOptions[] 
 }
 
 /**
- * Opcoes remotas — o item fora do alcance da chave CONTINUA na lista e continua
- * selecionavel, com cadeado no nome e o motivo na descricao. Se o usuario
- * insistir, a ativacao falha com uma mensagem que diz qual escopo falta.
+ * Opcoes remotas — o item fora do alcance da chave CONTINUA na lista, com
+ * `disabled: true`, cadeado no nome e o motivo na descricao. Em n8n 2.x fica
+ * cinza e inselecionavel; em 1.x o `disabled` e ignorado e o cadeado e o unico
+ * aviso (ver `motivoDeBloqueio`, no compartilhado). Se o valor chegar
+ * preenchido por outro caminho, a ativacao falha dizendo qual escopo falta.
  */
 export function opcoesComEscopo(
 	itens: ItemComEscopo[],
@@ -303,6 +305,7 @@ export function opcoesComEscopo(
 			name: `${MARCA_DE_CADEADO}${item.nome}`,
 			value: item.valor,
 			description: motivoDeBloqueio(item.escopo as string),
+			disabled: true,
 		});
 	}
 
