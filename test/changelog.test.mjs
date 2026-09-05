@@ -153,7 +153,11 @@ describe('o CHANGELOG.md deste repositorio', () => {
 	it('tem a secao [Não publicado] e a versao do package.json', () => {
 		const pacote = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-		expect(corpoNaoPublicado(CHANGELOG_REAL)).toBe('');
+		// A secao precisa EXISTIR; conteudo acumulado nela e o estado normal
+		// entre releases (Keep a Changelog) — exigir que estivesse vazia criava
+		// um beco: o release so promove conteudo commitado com CI verde, e o CI
+		// reprovava qualquer commit que adicionasse conteudo.
+		expect(CHANGELOG_REAL).toContain('## [Não publicado]');
 		expect(versoesRegistradas(CHANGELOG_REAL)).toContain(pacote.version);
 	});
 
@@ -166,18 +170,26 @@ describe('o CHANGELOG.md deste repositorio', () => {
 	});
 
 	it('e promovivel — o rodape de links tem a forma que o script espera', () => {
-		const comConteudo = CHANGELOG_REAL.replace(
-			'## [Não publicado]\n',
-			'## [Não publicado]\n\n### Adicionado\n\n- Teste.\n',
-		);
-		const novo = promoverNaoPublicado(comConteudo, '0.1.1', '2026-10-01');
+		// Com conteudo real acumulado em [Não publicado], promove-o como esta;
+		// vazio, injeta um sintetico. Nos dois casos o rodape real e exercitado.
+		const conteudoReal = corpoNaoPublicado(CHANGELOG_REAL);
+		const base = conteudoReal
+			? CHANGELOG_REAL
+			: CHANGELOG_REAL.replace(
+					'## [Não publicado]\n',
+					'## [Não publicado]\n\n### Adicionado\n\n- Teste.\n',
+				);
+		const esperado = conteudoReal || '### Adicionado\n\n- Teste.';
+		const pacote = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+		const novo = promoverNaoPublicado(base, '99.0.0', '2026-10-01');
 
-		expect(notasDaVersao(novo, '0.1.1')).toBe('### Adicionado\n\n- Teste.');
+		expect(notasDaVersao(novo, '99.0.0')).toBe(esperado);
+		expect(corpoNaoPublicado(novo)).toBe('');
 		expect(novo).toContain(
-			'[0.1.1]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.0...v0.1.1',
+			`[99.0.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v${pacote.version}...v99.0.0`,
 		);
 		expect(novo).toContain(
-			'[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.1...HEAD',
+			'[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v99.0.0...HEAD',
 		);
 	});
 });
