@@ -1,0 +1,142 @@
+# Changelog
+
+Todas as mudanças relevantes deste pacote são registradas aqui.
+
+O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o
+versionamento segue [Semantic Versioning](https://semver.org/lang/pt-BR/).
+
+Além das seções padrão, cada versão pode trazer **Limitações conhecidas** —
+restrições que continuam valendo depois da atualização. Elas não são defeitos
+pendentes deste pacote: são comportamentos do servidor do Fluxo CRM que mudam o
+que dá para montar, e quem instala precisa saber delas **antes**, não depois.
+
+## [Não publicado]
+
+## [0.1.0] - 2026-09-05
+
+Primeira versão pública. O pacote entrega dois nodes e uma credencial para
+automatizar o Fluxo CRM dentro do n8n, com a interface inteira em português.
+
+### Adicionado
+
+- **Node `Fluxo CRM`** — 19 recursos e 92 operações de leitura e escrita:
+  Contato, Empresa, Negócio, Lead, Pipeline, Atividade, Interação, Nota,
+  Arquivo, Etiqueta, Registro, Lote, Módulo, Organização, Webhook e os cinco de
+  atendimento (Conversa, Mensagem, Canal de Atendimento, Agente de Atendimento).
+- **Node `Fluxo CRM Trigger`** — gatilho com dois modos:
+  - **Webhook**, para reagir ao evento na hora em que o CRM o emite;
+  - **Sondagem Periódica**, para instâncias sem endereço público — e o único
+    caminho para atendimento.
+- **Credencial `Fluxo CRM API`** — URL base, chave de API e um botão **Test**
+  que responde qual organização atendeu e o que a chave pode fazer, em vez de um
+  "conectou" genérico.
+
+- **A interface se adapta à sua chave.** O node lê os escopos uma única vez e
+  guarda o resultado na credencial. Operação que a sua chave não pode executar
+  aparece com cadeado 🔒 e o motivo logo abaixo, dizendo qual escopo falta e onde
+  gerá-lo. Quem mesmo assim chegar à execução recebe esse erro, não o
+  `The value "x" is not supported!` do n8n.
+
+  O carimbo carrega uma impressão digital da credencial: trocar a chave descarta
+  o carimbo antigo, em vez de filtrar a interface contra os escopos da chave
+  anterior.
+
+- **Comportamento _fail-open_.** Se o node não conseguir descobrir os escopos —
+  uma chave legítima sem `meta:ler`, uma instância mais antiga — nada é
+  bloqueado. Nenhum cadeado aparece e o servidor decide a cada chamada. A
+  descoberta de escopos nunca vira um ponto de falha do seu fluxo.
+
+- **Seletor de registro** em Contato, Empresa e Negócio: buscar pelo nome
+  enquanto digita, colar o UUID, ou colar a URL da tela do CRM e deixar o node
+  extrair o identificador.
+
+- **Campos personalizados vindos do layout da sua organização.** Contato,
+  Empresa, Atividade, Negócio e Registro trazem um mapeador que lê os campos
+  reais da sua org, com o `obrigatório` de cada um respeitado em tempo de edição
+  — sem montar JSON à mão.
+
+- **`Criar ou Atualizar`** em Contato, Empresa, Lead, Negócio e Pipeline: casa
+  por um campo de índice e cria quando não encontra.
+
+- **`Lote`** grava até 200 fichas numa requisição só e devolve um item de saída
+  por linha enviada, preservando o índice — importação em massa sem estourar o
+  limite de requisições.
+
+- **`Registro`, a saída de emergência genérica.** Opera qualquer módulo pelo
+  slug, inclusive os personalizados que este node não conhece pelo nome. Um
+  módulo criado na sua org depois desta versão continua alcançável.
+
+- **`Chave de Idempotência`** disponível nas operações de escrita, em
+  **Opções**. Com `{{ $execution.id }}-{{ $itemIndex }}`, reprocessar uma
+  execução deixa de duplicar fichas.
+
+- **Toda entrega de webhook é verificada.** A assinatura `X-Fluxo-Signature` é
+  conferida sobre os bytes originais do corpo, com janela de replay de 300
+  segundos. Entrega que não confere recebe **401 e não dispara o workflow** —
+  uma entrega não verificada é indistinguível de uma forjada.
+
+- **Endereço de webhook validado antes do registro.** O node recusa `http://`,
+  `localhost`, redes privadas, CGNAT, link-local e endereços de metadados de
+  nuvem, em vez de registrar uma assinatura que nunca receberia nada.
+
+- **Sondagem que não inunda o workflow.** A primeira sondagem apenas fixa a
+  marca d'água, sem emitir a base inteira. A execução manual não mexe na marca e
+  devolve no máximo um item. Zero resultados não gera execução. E os ids do
+  instante da marca (até 200) são guardados para que o registro da fronteira não
+  saia duas vezes — os filtros de data da API são `>=`, não `>`.
+
+- **Nenhuma dependência de runtime.** O node roda dentro do processo do n8n, e
+  o campo `dependencies` é deliberadamente vazio. O CI reprova se alguém
+  adicionar uma.
+
+### Limitações conhecidas
+
+Todas são do **servidor** do Fluxo CRM, não deste pacote. Elas decidem qual modo
+de gatilho resolve o seu caso.
+
+- **Webhooks só disparam para escritas feitas pela API v1.** O que a sua equipe
+  faz na tela do Fluxo CRM não emite evento nenhum: um contato criado pelo
+  comercial na interface **não** dispara `contato.criado`. Há correção em
+  andamento no servidor, mas ela **ainda não está no ar** — quem precisa reagir
+  ao trabalho humano hoje precisa usar o modo **Sondagem**.
+
+- **Atendimento não emite evento nenhum.** Não existe `conversa.criada`, nem
+  `mensagem.recebida`, nem `conversa.atribuida`. "Disparar quando chegar
+  mensagem no WhatsApp" **só funciona por sondagem**, e não é algo que este node
+  possa contornar.
+
+- **"Tempo real" é até cerca de 1 minuto.** A entrega dos eventos sai de um cron
+  de 1 minuto, e o intervalo mínimo da sondagem do n8n também é 1 minuto. Casos
+  que exigem latência abaixo disso não são atendidos por este gatilho.
+
+- **Datas de saída não são normalizadas**, de propósito — converter só em alguns
+  lugares produziria duas convenções no mesmo fluxo. A maioria dos campos vem em
+  `America/Sao_Paulo`, mas `enviada_em` das mensagens, o `criado_em` do envelope
+  do webhook e `Registro › Listar Histórico` vêm em **UTC**. Ao comparar datas
+  de fontes diferentes no mesmo workflow, converta explicitamente.
+
+- **`PATCH` tem semânticas opostas conforme o recurso.** Em Contato, Empresa e
+  Atividade o campo `dados` **substitui** o conjunto inteiro: a chave que você
+  não preencher é **apagada**. Em Registro e Negócio o campo `valores`
+  **mescla**: o que você não preencher é preservado. Contato tem escapatória — a
+  opção **Mesclar Com os Valores Atuais**, ligada por padrão, lê a ficha e
+  mescla antes de gravar, ao custo de uma requisição a mais por item. Empresa e
+  Atividade **não** têm essa opção.
+
+- **Etiquetas são re-divididas pelo servidor** por `,` e `;`, então
+  `"VIP, Urgente"` vira duas etiquetas. A API acrescenta e nunca substitui; para
+  remover, use `Etiqueta › Desvincular`.
+
+- **`Mensagem › Enviar` só manda texto.** Mídia responde 422.
+
+- **Limite de 120 requisições por minuto por chave.** O node traduz o 429 com o
+  `Retry-After` que o servidor pediu, mas o teto é do servidor.
+
+### Notas
+
+- Community nodes exigem uma instância **self-hosted**. Este pacote não busca a
+  verificação oficial da n8n, porque a interface é em português e o processo de
+  verificação exige inglês — então ele não aparece no n8n Cloud.
+
+[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/releases/tag/v0.1.0
