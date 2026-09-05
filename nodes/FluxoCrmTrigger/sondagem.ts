@@ -272,7 +272,8 @@ async function conversasQueMoveram(
 }
 
 /**
- * Mensagens novas — o unico caminho para "chegou mensagem no WhatsApp".
+ * Mensagens novas — o caminho para "chegou mensagem no WhatsApp" numa
+ * instancia cuja API ainda nao emite `mensagem.recebida`.
  *
  * Custa uma requisicao por conversa que se moveu, porque
  * `GET /conversas/:id/mensagens` nao aceita filtro de data. O teto de conversas
