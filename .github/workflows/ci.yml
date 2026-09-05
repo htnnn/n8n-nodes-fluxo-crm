@@ -25,7 +25,13 @@ jobs:
           cache: npm
 
       - name: Instala as dependencias
-        run: npm ci
+        # `npm install`, nao `npm ci`: @n8n/node-cli arrasta @langchain/community,
+        # que declara centenas de dependencias opcionais. Versoes diferentes do npm
+        # resolvem essa arvore de formas diferentes, e `npm ci` — que exige
+        # correspondencia exata com o lock — reprova por diferenca de ambiente, nao
+        # por problema do pacote. Nada disso alcanca quem instala o node: o campo
+        # `dependencies` e vazio, e o passo final deste job falha se deixar de ser.
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint

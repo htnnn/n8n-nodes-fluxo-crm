@@ -39,7 +39,10 @@ jobs:
         run: npm install -g npm@latest
 
       - name: Instala as dependencias
-        run: npm ci
+        # `npm install` pela mesma razao do ci.yml, agravada aqui: o passo acima
+        # troca o npm por `npm@latest`, entao a arvore resolvida nunca coincide
+        # com a do lock gerado em outra versao.
+        run: npm install --no-audit --no-fund
 
       - name: Lint
         run: npm run lint
