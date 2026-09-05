@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificar:
+    name: Lint, build e testes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instala o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instala as dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Confere que o pacote nao ganhou dependencias de runtime
+        # O node roda dentro do processo do n8n: qualquer `dependencies` aqui
+        # entra no processo de quem instalar. O pacote e deliberadamente vazio
+        # nesse campo, e a checagem falha se alguem adicionar uma.
+        run: |
+          deps=$(node -p "JSON.stringify(require('./package.json').dependencies ?? {})")
+          if [ "$deps" != "{}" ]; then
+            echo "::error::package.json ganhou dependencies de runtime: $deps"
+            exit 1
+          fi
+          echo "OK: nenhuma dependencia de runtime."

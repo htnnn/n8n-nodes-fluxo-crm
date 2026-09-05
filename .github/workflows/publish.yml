@@ -1,0 +1,59 @@
+name: Publicar no npm
+
+# Publica via OIDC Trusted Publishing: o runner troca o token OIDC do GitHub
+# por uma credencial efemera no npm. Nao existe NPM_TOKEN neste repositorio, e
+# nao deve existir — o segredo de longa duracao e justamente o que o trusted
+# publishing elimina.
+#
+# Antes do primeiro uso, o dono do pacote precisa cadastrar este workflow como
+# publicador confiavel em npmjs.com (veja a secao "Publicacao" do README).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  publicar:
+    name: Publicar
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write # obrigatorio para o OIDC e para a proveniencia
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instala o Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Atualiza o npm
+        # Trusted publishing exige npm >= 11.5.1; o npm que vem com o Node 22 e
+        # anterior a isso e ignoraria o OIDC, caindo em pedido de token.
+        run: npm install -g npm@latest
+
+      - name: Instala as dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Testes
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Publica
+        # Sem NODE_AUTH_TOKEN de proposito. O npm detecta o ambiente OIDC pelo
+        # `id-token: write` e gera a proveniencia sozinho.
+        run: npm publish --access public
