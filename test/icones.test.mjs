@@ -3,11 +3,14 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
- * Os seis icones do pacote (dois por no, mais os da credencial) sao SVG
- * VETORIAL. Ja foram um PNG de 192x192 embutido em base64 dentro de um
- * `<image>`: aquele bitmap nao tinha um unico pixel transparente e 89% dele era
- * branco opaco, entao o n8n desenhava um quadrado BRANCO com a marca pequena no
- * meio — em qualquer tema, em qualquer tamanho.
+ * Os seis icones do pacote (dois por no, mais os da credencial) sao o ARQUIVO
+ * OFICIAL da marca, exportado do Illustrator, copiado sem tocar na geometria
+ * dos caminhos nem nas cores. Ja foram duas coisas piores: um PNG de 192x192
+ * embutido em base64 dentro de um `<image>` (aquele bitmap nao tinha um unico
+ * pixel transparente e 89% dele era branco opaco, entao o n8n desenhava um
+ * quadrado BRANCO com a marca pequena no meio) e, depois, uma RECONSTRUCAO
+ * feita a partir de um componente React do monorepo — vetorial e sem fundo,
+ * mas um desenho diferente do oficial.
  *
  * O arquivo e `.mjs` pelo mesmo motivo do `changelog.test.mjs`: o alvo nao e
  * TypeScript, e assim `import.meta.url` resolve o caminho sem depender do
@@ -22,7 +25,11 @@ import { describe, expect, it } from 'vitest';
  *      derivada, traco dilatado por metade do `stroke-width` e circulo pelo
  *      raio. E o que prova "a marca ocupa o quadro" sem rasterizar nada;
  *  (d) o viewBox e quadrado, para a marca nunca ser distorcida;
- *  (e) os seis arquivos sao identicos byte a byte.
+ *  (e) nada depende de CSS nem de nome generico: o Illustrator batiza as
+ *      classes de `.st0`..`.st4` e os gradientes de `Gradiente_sem_nome*`,
+ *      nomes que colidiriam com os de qualquer outro SVG inlinado na mesma
+ *      pagina;
+ *  (f) os seis arquivos sao identicos byte a byte.
  */
 
 const ICONES = [
@@ -71,15 +78,26 @@ function extremosDoCubico(p0, p1, p2, p3) {
 	return { min: Math.min(...valores), max: Math.max(...valores) };
 }
 
-/** Caixa envolvente da geometria de um `d`. So os comandos absolutos que a marca usa. */
+/**
+ * Caixa envolvente da geometria de um `d`. Cobre M/L/H/V/C/S/Z nas duas formas,
+ * absoluta e relativa: o export do Illustrator e quase todo relativo (`c`, `s`,
+ * `h`, `l`) porque isso encurta o arquivo, e usa `s` — o cubico "suave", cujo
+ * primeiro ponto de controle e a reflexao do segundo ponto de controle da curva
+ * anterior em torno do ponto atual.
+ */
 function caixaDoCaminho(d) {
-	const partes = d.match(/[MLHVCZmlhvcz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
+	const partes = d.match(/[MLHVCSZmlhvcsz]|-?\d*\.?\d+(?:e[-+]?\d+)?/g) ?? [];
 	let i = 0;
 	let comando = null;
 	let x = 0;
 	let y = 0;
 	let ix = 0;
 	let iy = 0;
+	// Segundo ponto de controle da curva anterior, em coordenada absoluta, ou
+	// `null` quando o comando anterior nao foi uma curva — nesse caso o `S`
+	// reflete o proprio ponto atual, como manda a especificacao.
+	let controleX = null;
+	let controleY = null;
 	const caixa = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
 	const marcar = (px, py) => {
 		caixa.minX = Math.min(caixa.minX, px);
@@ -89,40 +107,72 @@ function caixaDoCaminho(d) {
 	};
 	const numero = () => Number.parseFloat(partes[i++]);
 	while (i < partes.length) {
-		if (/[A-Za-z]/.test(partes[i])) comando = partes[i++];
-		if (comando === 'M') {
-			x = numero();
-			y = numero();
+		// `^[A-Za-z]$` e nao `[A-Za-z]`: um numero em notacao cientifica (`1e-5`)
+		// vira um token unico e tem letra no meio — testar "contem letra" o
+		// confundiria com um comando.
+		if (/^[A-Za-z]$/.test(partes[i])) comando = partes[i++];
+		if (comando === null) {
+			throw new Error(`coordenada sem comando no caminho, perto de "${partes[i]}"`);
+		}
+		const relativo = comando === comando.toLowerCase();
+		// Origem de cada par de coordenadas: o ponto atual no modo relativo, a
+		// origem do viewBox no absoluto. Recalculada a cada repeticao, porque um
+		// mesmo `c` pode trazer varias curvas encadeadas.
+		const ox = relativo ? x : 0;
+		const oy = relativo ? y : 0;
+		const letra = comando.toUpperCase();
+		if (letra === 'M') {
+			x = ox + numero();
+			y = oy + numero();
 			ix = x;
 			iy = y;
 			marcar(x, y);
-			comando = 'L'; // par extra depois de um M implica L, como manda o SVG
-		} else if (comando === 'L') {
-			x = numero();
-			y = numero();
+			controleX = null;
+			controleY = null;
+			comando = relativo ? 'l' : 'L'; // par extra depois de um M implica L
+		} else if (letra === 'L') {
+			x = ox + numero();
+			y = oy + numero();
 			marcar(x, y);
-		} else if (comando === 'H') {
-			x = numero();
+			controleX = null;
+			controleY = null;
+		} else if (letra === 'H') {
+			x = ox + numero();
 			marcar(x, y);
-		} else if (comando === 'V') {
-			y = numero();
+			controleX = null;
+			controleY = null;
+		} else if (letra === 'V') {
+			y = oy + numero();
 			marcar(x, y);
-		} else if (comando === 'C') {
-			const x1 = numero();
-			const y1 = numero();
-			const x2 = numero();
-			const y2 = numero();
-			const x3 = numero();
-			const y3 = numero();
+			controleX = null;
+			controleY = null;
+		} else if (letra === 'C' || letra === 'S') {
+			let x1;
+			let y1;
+			if (letra === 'C') {
+				x1 = ox + numero();
+				y1 = oy + numero();
+			} else {
+				x1 = controleX === null ? x : 2 * x - controleX;
+				y1 = controleY === null ? y : 2 * y - controleY;
+			}
+			const x2 = ox + numero();
+			const y2 = oy + numero();
+			const x3 = ox + numero();
+			const y3 = oy + numero();
 			const ex = extremosDoCubico(x, x1, x2, x3);
 			const ey = extremosDoCubico(y, y1, y2, y3);
 			marcar(ex.min, ey.min);
 			marcar(ex.max, ey.max);
+			controleX = x2;
+			controleY = y2;
 			x = x3;
 			y = y3;
-		} else if (comando === 'Z' || comando === 'z') {
+		} else if (letra === 'Z') {
 			x = ix;
 			y = iy;
+			controleX = null;
+			controleY = null;
 			comando = null;
 		} else {
 			throw new Error(`comando de caminho nao suportado por este teste: ${comando}`);
@@ -178,6 +228,23 @@ describe('icones do pacote', () => {
 		// A marca nao tem branco em lugar nenhum: qualquer branco no arquivo so
 		// pode ser fundo, e fundo e exatamente o defeito que este teste barra.
 		expect(svg).not.toMatch(/#fff\b|#ffffff\b|\bwhite\b|rgb\(\s*255\s*,\s*255\s*,\s*255/i);
+	});
+
+	it.each(ICONES)('%s nao depende de CSS nem de nome generico', (rel) => {
+		const svg = conteudo.get(rel);
+		// O export do Illustrator pinta por classe (`.st0`..`.st4`) declarada num
+		// `<style>`. Inlinado numa pagina, esse bloco vaza para o documento
+		// inteiro e dois SVGs quaisquer disputam os mesmos cinco nomes — por isso
+		// aqui cada elemento carrega o proprio `fill`.
+		expect(svg).not.toMatch(/<style\b/i);
+		expect(svg).not.toMatch(/\bclass\s*=/i);
+		// Mesma colisao pelo outro lado: `url(#Gradiente_sem_nome)` resolve para o
+		// PRIMEIRO id daquele nome no documento, que pode ser o de outro SVG.
+		const ids = [...svg.matchAll(/\bid="([^"]*)"/g)].map((m) => m[1]);
+		expect(ids.length).toBeGreaterThan(0);
+		for (const id of ids) expect(id).toMatch(/^fluxo/);
+		// Todo `url(#...)` aponta para um id que existe no proprio arquivo.
+		for (const [, alvo] of svg.matchAll(/url\(#([^)]*)\)/g)) expect(ids).toContain(alvo);
 	});
 
 	it.each(ICONES)('%s escala em qualquer tamanho', (rel) => {

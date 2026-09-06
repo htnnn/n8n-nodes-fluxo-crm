@@ -12,19 +12,35 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Alterado
+
+- **O campo "Poll Times" do gatilho nasce vazio.** Antes ele vinha preenchido
+  com `Every Minute` — o gatilho começava agendando sondagem por conta própria,
+  inclusive quando o modo escolhido era Webhook, onde sondagem não faz sentido
+  nenhum. Agora o campo nasce sem nenhum horário e a sondagem só liga quando
+  você clica em **Add Poll Time**. Sem horário, nenhum ciclo é agendado. Os
+  modos disponíveis vêm da mesma lista que o próprio n8n usa, então nunca
+  divergem dela.
+
 ### Corrigido
 
-- **O ícone do node, do gatilho e da credencial deixa de ser um quadrado
-  branco.** Os seis arquivos de ícone embutiam um PNG de 192×192 em base64
-  dentro de um `<image>`; esse bitmap não tinha um único pixel transparente e
-  89% dele era branco opaco, então o n8n desenhava um quadrado branco com a
-  marca pequena no meio — em qualquer tema e em qualquer tamanho. Agora são SVG
-  vetorial, com fundo transparente e a marca ocupando o quadro inteiro: encosta
-  nas quatro bordas (folga de 0,40% no eixo vertical, para não distorcer a
-  proporção) e fica nítida em qualquer escala, do ícone da paleta ao zoom
-  máximo do canvas. O tema escuro e o claro continuam separados, como o n8n
-  espera, e são idênticos — o gradiente roxo/azul da marca tem contraste nos
-  dois fundos. Cada arquivo caiu de 15 KB para 1,6 KB.
+- **O ícone do node, do gatilho e da credencial passa a ser o arquivo oficial
+  da marca, e deixa de ser um quadrado branco.** Os seis arquivos de ícone
+  embutiam um PNG de 192×192 em base64 dentro de um `<image>`; esse bitmap não
+  tinha um único pixel transparente e 89% dele era branco opaco, então o n8n
+  desenhava um quadrado branco com a marca pequena no meio — em qualquer tema e
+  em qualquer tamanho. Agora os seis são cópia do SVG oficial exportado do
+  Illustrator, sem um ponto de controle mexido: rasterizados lado a lado a
+  512×512, o ícone entregue e o arquivo oficial não divergem em **nenhum** dos
+  1.048.576 canais. Fundo transparente, a marca ocupando o quadro inteiro —
+  encosta nas bordas esquerda e direita, com 0,37% e 0,62% de folga em cima e
+  embaixo para o `viewBox` ficar quadrado sem esticar o desenho — e nítida em
+  qualquer escala, do ícone da paleta ao zoom máximo do canvas. O tema escuro e
+  o claro continuam separados, como o n8n espera, e são idênticos: o gradiente
+  roxo/azul da marca tem contraste nos dois fundos. Os nomes que o Illustrator
+  gera (`.st0`…`.st4`, `Gradiente_sem_nome`) viraram `fill` no próprio elemento
+  e ids prefixados, para dois SVGs inlinados na mesma página não disputarem os
+  mesmos nomes. Cada arquivo caiu de 15 KB para 2,7 KB.
 
 ## [0.2.0] - 2026-09-05
 
