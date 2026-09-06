@@ -71,10 +71,24 @@ export class FluxoCrmTrigger implements INodeType {
 		inputs: [],
 		outputs: [NodeConnectionTypes.Main],
 		credentials: [{ name: 'fluxoCrmApi', required: true, testedBy: 'testarCredencial' }],
-		// `pollTimes` NAO e declarado aqui: o carregador do n8n injeta o campo
-		// sozinho quando `polling` e `true`, e declara-lo produziria dois campos
-		// de intervalo na tela.
-		polling: true,
+		// `polling: true` NAO entra aqui, e a ausencia e deliberada.
+		//
+		// A unica coisa que essa flag faz no carregador (`applySpecialNodeParameters`,
+		// em `n8n-core/dist/nodes-loader/directory-loader.js`) e
+		// `properties.unshift(...commonPollingParameters)` — sem conferir se o node
+		// ja declara `pollTimes`. Declarar o campo COM a flag ligada produziria dois
+		// campos "Poll Times" na tela; e a versao injetada vem com
+		// `default: { item: [{ mode: 'everyMinute' }] }`, agendando sondagem por
+		// conta propria. Como o pedido e o campo nascer vazio, quem declara
+		// `pollTimes` e a descricao deste pacote (`descricao.ts`), com o default
+		// vazio, e a flag sai de cena.
+		//
+		// Nada mais no motor depende dela: `Workflow.getPollNodes()` e
+		// `validateWorkflowHasTriggerLikeNode()` olham o METODO `poll`, e
+		// `WorkflowExecute.runNode` chama `executePollNode` por `nodeType.poll`.
+		// No editor, `description.polling` so escolhe texto de dica — e todos os
+		// pontos que o leem (TriggerPanel, NodeDetailsView, ActivationModal) ja
+		// caem no ramo de webhook antes, porque este node declara `webhooks`.
 		webhooks: [
 			{
 				name: 'default',

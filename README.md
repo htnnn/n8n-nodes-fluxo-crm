@@ -405,6 +405,14 @@ Empresa, Lead, Negócio e Registro de Módulo.
 
 #### Comportamento que vale conhecer
 
+- **O campo "Poll Times" nasce vazio, e sem horário nenhum não há sondagem.** O
+  n8n, deixado por conta própria, entrega esse campo já preenchido com
+  `Every Minute` — o gatilho passaria a consultar a API de minuto em minuto
+  assim que fosse arrastado para a tela, inclusive no modo Webhook. Aqui ele
+  começa sem nenhuma entrada: clique em **Add Poll Time** para escolher o
+  intervalo, e só então a ativação do workflow agenda o ciclo. Um workflow
+  importado por JSON precisa trazer `pollTimes` preenchido (o exemplo abaixo
+  traz).
 - **A primeira sondagem não emite nada.** Ela apenas fixa a marca d'água no
   instante atual. Emitir a base inteira na ativação é a forma mais rápida de
   inundar um workflow — e não é o que "disparar quando acontecer" quer dizer.

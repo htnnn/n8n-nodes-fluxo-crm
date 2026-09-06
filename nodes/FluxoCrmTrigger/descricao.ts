@@ -1,5 +1,6 @@
 /* eslint-disable n8n-nodes-base/node-param-display-name-miscased -- a regra aplica title case do INGLES, que capitaliza toda palavra; em portugues Title Case mantem preposicoes em minusculas ("Maximo de Paginas por Sondagem"). A interface deste pacote e em portugues por decisao do fundador. */
 import type { INodeProperties } from 'n8n-workflow';
+import { cronNodeOptions } from 'n8n-workflow';
 
 import { MODOS, opcoesEstaticas, RECURSOS_COM_ATUALIZACAO, RECURSOS_SONDAVEIS } from './catalogo';
 
@@ -129,6 +130,40 @@ export const descricaoDoGatilho: INodeProperties[] = [
 			},
 		],
 		description: 'Qual data move a marca d’água entre um ciclo e o seguinte',
+	},
+	{
+		// Este campo NASCE VAZIO de proposito, e e por isso que ele e declarado
+		// aqui em vez de vir do carregador do n8n (ver o comentario em
+		// `FluxoCrmTrigger.node.ts`): o `commonPollingParameters` do n8n-core
+		// tem `default: { item: [{ mode: 'everyMinute' }] }`, o que faz o gatilho
+		// agendar sondagem de minuto em minuto assim que e colocado na tela —
+		// inclusive no modo Webhook, onde `poll()` devolve `null` e o ciclo nao
+		// serve para nada.
+		//
+		// Com o default vazio, `ActiveWorkflows.activatePolling` calcula
+		// `(pollTimes.item || []).map(toCronExpression)` sobre uma lista vazia e
+		// NAO registra cron nenhum. A sondagem so passa a existir quando a pessoa
+		// clica em "Add Poll Time".
+		//
+		// O campo NAO leva `displayOptions` para sumir no modo Webhook: o
+		// `activatePolling` roda para todo node que tenha o metodo `poll` —
+		// `Workflow.getPollNodes()` olha `nodeType.poll`, nao o `modo` — e le
+		// `getNodeParameter('pollTimes')` SEM fallback. Um parametro escondido e
+		// removido por `NodeHelpers.getNodeParameters` (returnNoneDisplayed
+		// `false`), entao esconde-lo no modo Webhook faria a ativacao do workflow
+		// morrer com "Could not get parameter".
+		//
+		// `options` aponta para o `cronNodeOptions` do proprio n8n-workflow, que e
+		// a mesma lista que o carregador usaria — assim os modos nunca divergem.
+		displayName: 'Poll Times',
+		name: 'pollTimes',
+		type: 'fixedCollection',
+		typeOptions: { multipleValues: true, multipleValueButtonText: 'Add Poll Time' },
+		default: {},
+		placeholder: 'Add Poll Time',
+		options: cronNodeOptions,
+		description:
+			'Com que frequencia o modo Sondagem consulta a API. Vem vazio: sem nenhum horario aqui o gatilho nao agenda ciclo nenhum — clique em "Add Poll Time" para ligar a sondagem. Nao tem efeito no modo Webhook.',
 	},
 	{
 		displayName: 'Opções da Sondagem',

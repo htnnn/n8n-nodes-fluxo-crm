@@ -1,4 +1,5 @@
-import type { INodeProperties, INodePropertyOptions } from 'n8n-workflow';
+import type { INode, INodeProperties, INodePropertyOptions, TriggerTime } from 'n8n-workflow';
+import { cronNodeOptions, NodeHelpers, toCronExpression } from 'n8n-workflow';
 import { describe, expect, it } from 'vitest';
 
 import { MARCA_DE_CADEADO } from '../nodes/FluxoCrm/compartilhado/catalogo';
@@ -50,15 +51,14 @@ describe('descricao do node', () => {
 			'create',
 			'delete',
 		]);
-		expect(node.description.polling).toBe(true);
+		// O que faz o node sondar e o METODO `poll` — `Workflow.getPollNodes()` e
+		// `validateWorkflowHasTriggerLikeNode()` olham `nodeType.poll`, nunca
+		// `description.polling`.
+		expect(typeof node.poll).toBe('function');
 		expect(node.description.webhooks?.[0]).toMatchObject({
 			name: 'default',
 			httpMethod: 'POST',
 		});
-	});
-
-	it('NAO declara pollTimes — o carregador do n8n injeta o campo sozinho', () => {
-		expect(arvore.some((propriedade) => propriedade.name === 'pollTimes')).toBe(false);
 	});
 
 	it('todo loadOptionsMethod citado esta registrado na classe', () => {
@@ -96,6 +96,87 @@ describe('descricao do node', () => {
 				expect(valores, `${propriedade.name} cita ${recurso}`).toContain(recurso);
 			}
 		}
+	});
+});
+
+/**
+ * O campo de intervalo da sondagem.
+ *
+ * A regra que estes testes seguram: o gatilho nao pode nascer agendando nada.
+ * O `commonPollingParameters` que o carregador do n8n injetaria vem com
+ * `default: { item: [{ mode: 'everyMinute' }] }` — este pacote declara o campo
+ * por conta propria justamente para trocar esse default por vazio.
+ */
+describe('Poll Times', () => {
+	const declarados = propriedades.filter((propriedade) => propriedade.name === 'pollTimes');
+	const pollTimes = declarados[0];
+
+	const horariosDoDefault = (propriedade: INodeProperties): TriggerTime[] =>
+		((propriedade.default as { item?: TriggerTime[] }).item ?? []) as TriggerTime[];
+
+	const noDoWorkflow = (modo: string): INode => ({
+		id: 'gatilho',
+		name: 'Fluxo CRM Trigger',
+		type: 'n8n-nodes-fluxo-crm.fluxoCrmTrigger',
+		typeVersion: 1,
+		position: [0, 0],
+		parameters: { modo },
+	});
+
+	it('e declarado UMA vez por este pacote, nunca injetado pelo carregador', () => {
+		expect(declarados).toHaveLength(1);
+		// `applySpecialNodeParameters` (n8n-core) da um `properties.unshift(...)`
+		// CEGO quando `description.polling` e verdadeiro: nao confere se ja existe
+		// um `pollTimes`. Ligar a flag aqui produziria dois campos "Poll Times" na
+		// tela, um deles com o default de minuto em minuto.
+		expect(node.description.polling).toBeUndefined();
+	});
+
+	it('nasce vazio — nenhum horario configurado', () => {
+		expect(pollTimes.type).toBe('fixedCollection');
+		expect(pollTimes.typeOptions?.multipleValues).toBe(true);
+		expect(pollTimes.typeOptions?.multipleValueButtonText).toBe('Add Poll Time');
+		expect(pollTimes.default).toEqual({});
+		expect(horariosDoDefault(pollTimes)).toHaveLength(0);
+	});
+
+	it('com o default vazio o n8n nao agenda cron nenhum; um horario ja agenda', () => {
+		// Reproduz `ActiveWorkflows.activatePolling`:
+		//   const cronExpressions = (pollTimes.item || []).map(toCronExpression)
+		expect(horariosDoDefault(pollTimes).map(toCronExpression)).toEqual([]);
+
+		// E o modo Sondagem continua funcionando assim que a pessoa clica em
+		// "Add Poll Time".
+		const comUmHorario: TriggerTime[] = [{ mode: 'everyHour', minute: 0 }];
+		expect(comUmHorario.map(toCronExpression)).toHaveLength(1);
+	});
+
+	it('fica resolvivel nos DOIS modos — esconde-lo mataria a ativacao', () => {
+		// `activatePolling` roda para TODO node que tenha o metodo `poll`
+		// (`getPollNodes()` olha `nodeType.poll`, nao o parametro `modo`) e le
+		// `getNodeParameter('pollTimes')` sem valor de reserva, estourando
+		// "Could not get parameter" se o parametro nao vier. E
+		// `getNodeParameters` com `returnNoneDisplayed: false` — que e como o
+		// n8n monta os parametros do node — DESCARTA parametro escondido. Logo,
+		// um `displayOptions` aqui derrubaria a ativacao no modo Webhook.
+		expect(pollTimes.displayOptions).toBeUndefined();
+
+		for (const modo of ['webhook', 'polling']) {
+			const alvo = noDoWorkflow(modo);
+			const resolvidos = NodeHelpers.getNodeParameters(
+				propriedades,
+				alvo.parameters,
+				true,
+				false,
+				alvo,
+				node.description,
+			);
+			expect(resolvidos?.pollTimes, `modo ${modo}`).toEqual({});
+		}
+	});
+
+	it('reaproveita a lista de modos de cron do proprio n8n, sem copia local', () => {
+		expect(pollTimes.options).toBe(cronNodeOptions);
 	});
 });
 
