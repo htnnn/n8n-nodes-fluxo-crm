@@ -711,7 +711,7 @@ npm install
 npm run dev        # sobe um n8n com este node linkado
 npm run lint       # regras do n8n-node lint
 npm run typecheck
-npm test           # 307 testes
+npm test           # 326 testes
 npm run build
 ```
 

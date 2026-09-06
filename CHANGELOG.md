@@ -12,6 +12,20 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Corrigido
+
+- **O ícone do node, do gatilho e da credencial deixa de ser um quadrado
+  branco.** Os seis arquivos de ícone embutiam um PNG de 192×192 em base64
+  dentro de um `<image>`; esse bitmap não tinha um único pixel transparente e
+  89% dele era branco opaco, então o n8n desenhava um quadrado branco com a
+  marca pequena no meio — em qualquer tema e em qualquer tamanho. Agora são SVG
+  vetorial, com fundo transparente e a marca ocupando o quadro inteiro: encosta
+  nas quatro bordas (folga de 0,40% no eixo vertical, para não distorcer a
+  proporção) e fica nítida em qualquer escala, do ícone da paleta ao zoom
+  máximo do canvas. O tema escuro e o claro continuam separados, como o n8n
+  espera, e são idênticos — o gradiente roxo/azul da marca tem contraste nos
+  dois fundos. Cada arquivo caiu de 15 KB para 1,6 KB.
+
 ## [0.2.0] - 2026-09-05
 
 ### Adicionado
