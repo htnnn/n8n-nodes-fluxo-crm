@@ -1,6 +1,6 @@
 {
 	"name": "n8n-nodes-fluxo-crm",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"description": "Node comunitario do n8n para o Fluxo CRM: operacoes filtradas pelos escopos da chave de API",
 	"license": "MIT",
 	"homepage": "https://github.com/htnnn/n8n-nodes-fluxo-crm",
