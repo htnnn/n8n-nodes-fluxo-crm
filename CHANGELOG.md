@@ -12,6 +12,20 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Campo "Motivo da Perda" em "Marcar como Perdido" e em "Mover".** A API
+  aceita agora um `motivo` opcional (1 a 500 caracteres) ao perder um negócio e
+  ao mover um negócio para um estágio de perda. O node envia a chave só quando
+  o campo está preenchido — vazio ou só espaço em branco nunca vai no corpo,
+  porque o schema do servidor é estrito e rejeita a chave vazia.
+
+### Limitações conhecidas
+
+- Com a lista de motivos cadastrada na organização, Marcar como Perdido e
+  Mover para um estágio de perda sem o motivo devolvem erro 422. O motivo
+  precisa ser exatamente uma das opções cadastradas.
+
 ## [0.3.0] - 2026-09-06
 
 ### Alterado

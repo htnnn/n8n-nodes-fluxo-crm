@@ -418,6 +418,57 @@ describe('negocio e atividade: so o que a rota aceita', () => {
 	});
 });
 
+describe('negocio: motivo da perda em marcarPerdido e mover', () => {
+	it('marcarPerdido com motivo: a chave vai no corpo, aparada', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			negocioId: REGISTRO,
+			estagio_id: EQUIPE,
+			motivo: '  Preco alto  ',
+		});
+
+		await executarNegocio(ctx, 'marcarPerdido', 0);
+		expect(chamadas[0]).toMatchObject({
+			metodo: 'POST',
+			caminho: `/negocios/${REGISTRO}/perder`,
+		});
+		expect(chamadas[0].corpo).toEqual({ estagio_id: EQUIPE, motivo: 'Preco alto' });
+	});
+
+	it('marcarPerdido sem motivo: a chave nem aparece no corpo — o schema do servidor e estrito', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			negocioId: REGISTRO,
+			estagio_id: EQUIPE,
+			motivo: '',
+		});
+
+		await executarNegocio(ctx, 'marcarPerdido', 0);
+		expect(chamadas[0].corpo).toEqual({ estagio_id: EQUIPE });
+	});
+
+	it('marcarPerdido com motivo so de espacos: tratado como vazio, sem a chave', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			negocioId: REGISTRO,
+			estagio_id: EQUIPE,
+			motivo: '   ',
+		});
+
+		await executarNegocio(ctx, 'marcarPerdido', 0);
+		expect(chamadas[0].corpo).toEqual({ estagio_id: EQUIPE });
+	});
+
+	it('mover com motivo: a mesma regra vale — o servidor decide se o estagio de destino e de perda', async () => {
+		const { ctx, chamadas } = criarContextoDeExecucao({
+			negocioId: REGISTRO,
+			estagio_id: EQUIPE,
+			motivo: 'Fechou com concorrente',
+		});
+
+		await executarNegocio(ctx, 'mover', 0);
+		expect(chamadas[0]).toMatchObject({ metodo: 'POST', caminho: `/negocios/${REGISTRO}/mover` });
+		expect(chamadas[0].corpo).toEqual({ estagio_id: EQUIPE, motivo: 'Fechou com concorrente' });
+	});
+});
+
 // ── O mapper e os filtros, por operacao ─────────────────────────────
 
 const DICIONARIO: IDataObject[] = [

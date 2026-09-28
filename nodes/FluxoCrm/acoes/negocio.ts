@@ -299,10 +299,17 @@ export async function executarNegocio(
 				marcarPerdido: 'perder',
 			};
 
+			// `marcarGanho` nao declara este campo no painel; o default '' evita
+			// erro de parametro inexistente para essa operacao.
+			const motivo =
+				operacao === 'marcarGanho'
+					? ''
+					: (ctx.getNodeParameter('motivo', i, '') as string).trim();
+
 			const resposta = await requisitar(ctx, {
 				metodo: 'POST',
 				caminho: `/negocios/${id}/${caminhos[operacao]}`,
-				corpo: { estagio_id: estagioId },
+				corpo: { estagio_id: estagioId, ...(motivo ? { motivo } : {}) },
 			});
 			return [item(resposta.corpo, i)];
 		}
