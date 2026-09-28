@@ -315,7 +315,7 @@ export const descricaoDoNegocio: INodeProperties[] = [
 		default: '',
 		displayOptions: { show: { resource: [RECURSO], operation: ['marcarPerdido', 'mover'] } },
 		description:
-			'Por que o negocio foi perdido. Obrigatorio quando a organizacao cadastrou a lista de motivos (use exatamente uma das opcoes). No Mover, so e enviado quando o estagio de destino e de perda.',
+			'Por que o negocio foi perdido. Obrigatorio quando a organizacao cadastrou a lista de motivos (use exatamente uma das opcoes). No Mover, so vale quando o estagio de destino e de perda.',
 	},
 
 	{
