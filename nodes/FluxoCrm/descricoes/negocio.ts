@@ -309,6 +309,16 @@ export const descricaoDoNegocio: INodeProperties[] = [
 	},
 
 	{
+		displayName: 'Motivo da Perda',
+		name: 'motivo',
+		type: 'string',
+		default: '',
+		displayOptions: { show: { resource: [RECURSO], operation: ['marcarPerdido', 'mover'] } },
+		description:
+			'Por que o negocio foi perdido. Obrigatorio quando a organizacao cadastrou a lista de motivos (use exatamente uma das opcoes). No Mover, so e enviado quando o estagio de destino e de perda.',
+	},
+
+	{
 		displayName:
 			'Campos nao preenchidos aqui sao PRESERVADOS: esta operacao mescla os valores. Para limpar um campo, envie-o explicitamente vazio.',
 		name: 'avisoDeMesclagem',
