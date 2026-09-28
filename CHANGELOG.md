@@ -12,6 +12,8 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+## [0.4.0] - 2026-09-28
+
 ### Adicionado
 
 - **Campo "Motivo da Perda" em "Marcar como Perdido" e em "Mover".** A API
@@ -309,7 +311,8 @@ de gatilho resolve o seu caso.
   verificação oficial da n8n, porque a interface é em português e o processo de
   verificação exige inglês — então ele não aparece no n8n Cloud.
 
-[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.3.0...HEAD
+[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.1.0...v0.1.1
