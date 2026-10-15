@@ -16,12 +16,15 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 - **Nomes no lugar de ids no painel do node.**
   - Campo de tipo usuário no mapeador de campos (o Responsável incluído) vira
-    uma lista com os nomes dos usuários da organização. Antes era texto, onde
-    se colava o id. Sem o escopo `meta:ler` a lista não vem e o campo continua
-    texto, como antes.
+    uma lista com os nomes dos usuários ativos da organização. Antes era texto,
+    onde se colava o id. O e-mail aparece só para distinguir dois usuários com
+    o mesmo nome. Valor já salvo que não está na lista (alguém desativado, por
+    exemplo) continua valendo e aparece como "(fora da lista de ativos)". Se a
+    lista não puder ser lida na hora (limite de requisições, falha passageira),
+    o campo continua texto, como antes.
   - Campo de referência mostra no rótulo de qual módulo é o id esperado, por
-    exemplo "Contato (id de contatos)". "Conectado a" mostra "(ids de
-    registros)".
+    exemplo "Contato (id de contatos)". "Conectado a" mostra "(lista de ids de
+    registros, por expressão)": a API recusa texto separado por vírgula.
   - A busca de negócios no modo "Da Lista" mostra o campo principal do módulo.
     Antes mostrava `titulo` ou `nome` e caía no id quando a organização tinha
     outro campo principal.

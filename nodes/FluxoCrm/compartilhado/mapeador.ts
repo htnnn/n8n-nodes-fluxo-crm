@@ -369,8 +369,8 @@ export interface OpcoesDoMapeador {
 	/**
 	 * FLU-1590 — usuarios da org (`GET /usuarios`), para o campo de tipo
 	 * `usuario` virar lista em vez de texto onde se cola o uuid. Ausente ou
-	 * vazia (chave sem `meta:ler`), o campo segue texto: dropdown vazio trava a
-	 * edicao.
+	 * vazia (a lista nao pode ser lida), o campo segue texto: dropdown vazio
+	 * trava a edicao. Quem monta a lista e `resourceMapping.ts`.
 	 */
 	usuarios?: INodePropertyOptions[];
 }
@@ -380,7 +380,8 @@ export interface OpcoesDoMapeador {
  * `referencia` sem `moduloSlug` aceita qualquer registro — o rotulo nao inventa.
  */
 function rotuloComAlvo(nome: string, tipoDaApi: string, campo: IDataObject): string {
-	if (tipoDaApi === 'conectado_a') return `${nome} (ids de registros)`;
+	// A API exige LISTA (`["uuid", ...]`): texto com virgulas leva 422.
+	if (tipoDaApi === 'conectado_a') return `${nome} (lista de ids de registros, por expressão)`;
 	if (tipoDaApi !== 'referencia') return nome;
 	const alvo = texto(objeto(campo.opcoes).moduloSlug);
 	return alvo === '' ? `${nome} (id de registro)` : `${nome} (id de ${alvo})`;

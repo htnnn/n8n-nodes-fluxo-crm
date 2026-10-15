@@ -441,6 +441,6 @@ describe('campos que apontam para outra entidade', () => {
 		]);
 		expect(comAlvo).toMatchObject({ type: 'string', displayName: 'Contato (id de contatos)' });
 		expect(semAlvo.displayName).toBe('Livre (id de registro)');
-		expect(conectado.displayName).toBe('Conectado a (ids de registros)');
+		expect(conectado.displayName).toBe('Conectado a (lista de ids de registros, por expressão)');
 	});
 });
