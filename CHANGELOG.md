@@ -12,6 +12,40 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Recurso "Atendimento › Grupo", com Listar e Listar Participantes.**
+  - **Listar** devolve os grupos de WhatsApp dos canais de atendimento. Filtra
+    por canal e por parte do nome. Cada grupo traz `participantes_ativos`.
+    Traz também `canal_saiu_em`, preenchido quando o número saiu do grupo e a
+    lista parou de ser atualizada.
+  - **Listar Participantes** devolve quem está no grupo. O filtro "Status" pede
+    quem saiu ou os dois, e o filtro "Alterados Desde" pede só quem entrou ou
+    saiu a partir de uma data. A paginação é por cursor, até 200 por página, e
+    "Retornar Tudo" segue até o fim.
+  - Os dois exigem o escopo `atendimento:ler`.
+  - O node só manda "Status" quando você escolhe. Sem ele, o servidor decide:
+    com "Alterados Desde", a chave de admin recebe entradas e saídas.
+- **As mensagens do atendimento chegam com três campos a mais**, sem mudar o
+  node:
+  - `origem` diz quem pôs no ar a mensagem que foi ao contato: `automacao`,
+    `disparo`, `csat`, `bot`, `celular` ou `manual`. Vem `null` em entrada,
+    nota interna e evento.
+  - `automacao_nome` traz o nome da automação.
+  - Mensagem de botões ou carrossel gravada sem texto passa a trazer em
+    `conteudo` o título, o texto e o rodapé.
+  - Valem para Mensagem › Listar e para os eventos de mensagem do gatilho.
+
+### Limitações conhecidas
+
+- **Só a chave de admin da organização vê todos os grupos.** As demais veem só
+  o grupo cuja conversa o usuário enxerga no CRM. Para elas, "Saídos" e "Todos"
+  devolvem 403.
+- **"Alterados Desde" pode perder transição.** As datas de entrada e saída são
+  a hora em que a sincronização começou, gravada só no fim dela. Quem saiu e
+  voltou mantém a data de entrada original. Para não perder ninguém, use margem
+  de 1 hora ou leia a lista inteira e compare com a anterior.
+
 ## [0.4.0] - 2026-09-28
 
 ### Adicionado

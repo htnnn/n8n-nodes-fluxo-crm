@@ -6,6 +6,7 @@ import { filtrosSimples } from '../compartilhado/filtros';
 import {
 	LIMITE_MAXIMO_DA_PAGINA,
 	requisitar,
+	requisitarLista,
 	requisitarListaSimples,
 	TETO_DE_REQUISICOES,
 } from '../compartilhado/transporte';
@@ -19,7 +20,7 @@ import {
 } from '../compartilhado/utilitarios';
 
 /**
- * Atendimento: conversas, mensagens, canais e agentes.
+ * Atendimento: conversas, mensagens, grupos de WhatsApp, canais e agentes.
  *
  * O caso especial esta em `conversa:listar` — a unica lista da v1 que pagina
  * por DATA e nao por cursor keyset. A regra do laco vive em
@@ -80,6 +81,33 @@ export async function executarAtendimento(
 			caminho,
 			retornarTudo,
 			limite,
+		});
+		return dados.map((linha) => item(linha, i));
+	}
+
+	if (recurso === 'grupoAtendimento') {
+		let caminho = '/atendimento/grupos';
+		if (operacao === 'listarParticipantes') {
+			const id = exigirUuid(ctx, ctx.getNodeParameter('grupoId', i), 'grupo', i);
+			caminho = `/atendimento/grupos/${id}/participantes`;
+		} else if (operacao !== 'listar') {
+			throw new NodeOperationError(
+				ctx.getNode(),
+				`A operacao "${operacao}" nao existe no recurso Grupo`,
+				{ itemIndex: i },
+			);
+		}
+
+		// `status` so vai quando a pessoa escolhe: sem ele, o servidor decide, e com
+		// `alterado_desde` a chave de admin recebe entradas E saidas. Mandar
+		// `ativos` por padrao esconderia as saidas justamente nesse caso.
+		const dados = await requisitarLista(ctx, {
+			metodo: 'GET',
+			caminho,
+			query: filtrosSimples(ctx, 'filters', i),
+			retornarTudo: ctx.getNodeParameter('returnAll', i, false) as boolean,
+			limite: ctx.getNodeParameter('limit', i, 50) as number,
+			itemIndex: i,
 		});
 		return dados.map((linha) => item(linha, i));
 	}

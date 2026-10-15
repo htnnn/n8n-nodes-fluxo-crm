@@ -101,9 +101,10 @@ describe('achabilidade do Atendimento', () => {
 		mensagem: 'Atendimento › Mensagem',
 		canalAtendimento: 'Atendimento › Canal',
 		agenteAtendimento: 'Atendimento › Atendente',
+		grupoAtendimento: 'Atendimento › Grupo',
 	};
 
-	it('os quatro recursos mantem o valor e levam "Atendimento" no rotulo', () => {
+	it('os recursos de atendimento mantem o valor e levam "Atendimento" no rotulo', () => {
 		for (const [valor, nome] of Object.entries(ROTULOS)) {
 			const recurso = encontrarRecurso(valor);
 			expect(recurso, valor).toBeDefined();
@@ -126,8 +127,8 @@ describe('achabilidade do Atendimento', () => {
 		}
 	});
 
-	it('conversa, mensagem e canal citam WhatsApp, que e como o usuario procura', () => {
-		for (const valor of ['conversa', 'mensagem', 'canalAtendimento']) {
+	it('conversa, mensagem, canal e grupo citam WhatsApp, que e como o usuario procura', () => {
+		for (const valor of ['conversa', 'mensagem', 'canalAtendimento', 'grupoAtendimento']) {
 			const recurso = encontrarRecurso(valor)!;
 			const textos = [recurso.descricao, ...recurso.operacoes.flatMap((op) => [op.acao, op.descricao])];
 			expect(textos.some((texto) => texto.includes('WhatsApp')), valor).toBe(true);

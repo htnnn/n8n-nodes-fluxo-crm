@@ -9,7 +9,7 @@ O pacote traz:
 
 | Item                   | O que é                                                                  |
 | ---------------------- | ------------------------------------------------------------------------ |
-| **Fluxo CRM**          | Node de ação: 19 recursos e 92 operações de leitura e escrita             |
+| **Fluxo CRM**          | Node de ação: 20 recursos e 94 operações de leitura e escrita             |
 | **Fluxo CRM Trigger**  | Node de gatilho: modo Webhook e modo Sondagem Periódica                   |
 | **Fluxo CRM API**      | Credencial compartilhada pelos dois                                       |
 
@@ -185,7 +185,7 @@ nada. Nenhum cadeado aparece, e o servidor decide a cada chamada.
 
 ## Recursos
 
-19 recursos, 92 operações.
+20 recursos, 94 operações.
 
 | Recurso                 | Para que serve                                                     | Operações |
 | ----------------------- | ------------------------------------------------------------------ | --------- |
@@ -193,6 +193,7 @@ nada. Nenhum cadeado aparece, e o servidor decide a cada chamada.
 | **Atendimento › Atendente** | Pessoas habilitadas a responder atendimentos                    | 1         |
 | **Atendimento › Canal** | Canais conectados ao atendimento (WhatsApp e demais)                | 1         |
 | **Atendimento › Conversa** | Conversas de atendimento nos canais de mensageria                | 3         |
+| **Atendimento › Grupo** | Grupos de WhatsApp dos canais e os participantes de cada um         | 2         |
 | **Atendimento › Mensagem** | Mensagens e notas internas dentro de uma conversa de atendimento | 3         |
 | **Atividade**           | Tarefas, ligações e reuniões ligadas a uma entidade                 | 6         |
 | **Contato**             | Fichas de pessoas do CRM                                            | 8         |

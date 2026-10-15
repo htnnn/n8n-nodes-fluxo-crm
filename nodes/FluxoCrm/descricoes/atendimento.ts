@@ -7,6 +7,7 @@ import { campoDeId, camposDeLista, camposDeListaSemPaginacao, opcaoDeIdempotenci
 
 const CONVERSA = 'conversa';
 const MENSAGEM = 'mensagem';
+const GRUPO = 'grupoAtendimento';
 
 /**
  * Os 3 status FILTRAVEIS. O banco tem um quarto, `adiada`, que aparece nas
@@ -193,6 +194,83 @@ export const descricaoDoAtendimento: INodeProperties[] = [
 		default: {},
 		displayOptions: { show: { resource: [MENSAGEM], operation: ['criarNotaInterna'] } },
 		options: [opcaoDeIdempotencia],
+	},
+
+	// ── Grupo de WhatsApp ──────────────────────────────────────────────────
+	...camposDeLista({ recurso: GRUPO, operacoes: ['listar', 'listarParticipantes'] }),
+
+	{
+		displayName: 'Filtros',
+		name: 'filters',
+		type: 'collection',
+		placeholder: 'Adicionar filtro',
+		default: {},
+		displayOptions: { show: { resource: [GRUPO], operation: ['listar'] } },
+		options: [
+			{
+				displayName: 'Busca no Nome',
+				name: 'busca',
+				type: 'string',
+				default: '',
+				description: 'Parte do nome do grupo, sem diferenciar maiusculas',
+			},
+			{
+				displayName: 'Canal',
+				name: 'canal_id',
+				type: 'options',
+				typeOptions: { loadOptionsMethod: 'carregarCanais' },
+				default: '',
+				description: 'Numero de WhatsApp dono dos grupos',
+			},
+		],
+	},
+
+	campoDeId({
+		nome: 'grupoId',
+		rotulo: 'Grupo',
+		descricao: 'Identificador do grupo (campo "ID" da operacao Listar), no formato UUID',
+		recurso: GRUPO,
+		operacoes: ['listarParticipantes'],
+	}),
+
+	{
+		displayName:
+			'Sem filtro, vem quem esta no grupo hoje. "Saidos" e "Todos" exigem chave de admin da organizacao; as demais recebem 403. As datas de entrada e saida sao a hora em que a sincronizacao comecou: para nao perder ninguem entre duas leituras, use "Alterados Desde" com margem de 1 hora, ou leia a lista inteira e compare com a anterior.',
+		name: 'avisoDeParticipantes',
+		type: 'notice',
+		default: '',
+		displayOptions: { show: { resource: [GRUPO], operation: ['listarParticipantes'] } },
+	},
+
+	{
+		displayName: 'Filtros',
+		name: 'filters',
+		type: 'collection',
+		placeholder: 'Adicionar filtro',
+		default: {},
+		displayOptions: { show: { resource: [GRUPO], operation: ['listarParticipantes'] } },
+		options: [
+			{
+				displayName: 'Alterados Desde',
+				name: 'alterado_desde',
+				type: 'dateTime',
+				default: '',
+				description:
+					'Somente quem entrou ou saiu a partir deste instante. Sem "Status", a chave de admin recebe entradas e saidas; as demais, so entradas.',
+			},
+			{
+				displayName: 'Status',
+				name: 'status',
+				type: 'options',
+				options: [
+					{ name: 'Ativos', value: 'ativos' },
+					{ name: 'Saídos', value: 'saidos' },
+					{ name: 'Todos', value: 'todos' },
+				],
+				default: 'ativos',
+				description: 'Quem esta no grupo, quem saiu ou os dois. "Saidos" e "Todos" exigem chave de admin.',
+			},
+		],
 	},
 
 	// ── Canal e Agente ─────────────────────────────────────────────────────
