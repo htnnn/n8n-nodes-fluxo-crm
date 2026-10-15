@@ -66,7 +66,7 @@ describe('campo de usuario no mapper', () => {
 		const { campo } = await dono({ value: null });
 		expect(campo?.type).toBe('options');
 		expect(campo?.options).toEqual([
-			{ name: '— não enviar —', value: '' },
+			{ name: '— Não Enviar —', value: '' },
 			{ name: 'Ana (ana@a.com)', value: 'u-ana1' },
 			{ name: 'Ana (ana@b.com)', value: 'u-ana2' },
 			{ name: 'Bruno', value: 'u-bruno' },

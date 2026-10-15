@@ -113,7 +113,7 @@ async function opcoesDeUsuario(
 
 	const vezes = new Map<string, number>();
 	for (const linha of ativos) vezes.set(String(linha.nome), (vezes.get(String(linha.nome)) ?? 0) + 1);
-	const opcoes: INodePropertyOptions[] = [{ name: '— não enviar —', value: '' }];
+	const opcoes: INodePropertyOptions[] = [{ name: '— Não Enviar —', value: '' }];
 	for (const linha of ativos) {
 		const nome = String(linha.nome ?? '');
 		opcoes.push({
