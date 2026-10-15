@@ -13,15 +13,15 @@ import { comoErroDoNode, requisitar, type ContextoDeRequisicao } from './transpo
  * escopos sao independentes: "escrever nao implica ler") abria o dropdown
  * vazio, sem ter como assinar nada.
  *
- * Espelho de `EVENTOS_DISPONIVEIS` (`apps/api/src/api-publica/webhooks.ts`,
- * linhas 23-77), na mesma ordem. `webhook.teste` NAO entra: e emitido apenas
+ * Espelho de `EVENTOS_DISPONIVEIS` (`apps/api/src/api-publica/webhooks.ts`),
+ * na mesma ordem. `webhook.teste` NAO entra: e emitido apenas
  * por `POST /webhooks/:id/testar`, e o servidor recusa assinatura que o cite
  * (`eventoValido` nao o conhece).
  *
- * Os oito ultimos — etiqueta, atendimento e automacao — nasceram com os
- * emissores de dominio (`eventos-dominio.ts`): so existem em instancias com a
- * API que os emite. Numa anterior, `POST /webhooks` recusa a assinatura com 422
- * nomeando o evento.
+ * Os de etiqueta, atendimento e automacao nasceram com os emissores de dominio
+ * (`eventos-dominio.ts`), e os quatro de participante de grupo com a FLU-1576:
+ * so existem em instancias com a API que os emite. Numa anterior,
+ * `POST /webhooks` recusa a assinatura com 422 nomeando o evento.
  */
 
 export const CORINGA_DE_EVENTOS = '*';
@@ -36,6 +36,9 @@ export interface EventoDoServidor {
 
 const EXIGE_API_COM_EVENTOS_DE_DOMINIO =
 	'Exige a API do Fluxo CRM com os emissores de dominio (etiqueta, atendimento, automacao); numa instancia anterior a assinatura e recusada.';
+
+const EXIGE_GRUPO =
+	'So chega se a chave da credencial for de usuario admin. Exige a API do Fluxo CRM de 15/10/2026 ou mais nova; numa instancia anterior a assinatura e recusada.';
 
 export const EVENTOS_DO_SERVIDOR: readonly EventoDoServidor[] = [
 	{ valor: 'contato.criado', rotulo: 'Contato › Criado' },
@@ -112,6 +115,29 @@ export const EVENTOS_DO_SERVIDOR: readonly EventoDoServidor[] = [
 		rotulo: 'Automacao › Falhou',
 		descricao: `Uma automacao do CRM terminou com erro. ${EXIGE_API_COM_EVENTOS_DE_DOMINIO} Identificador na API: automacao.falhou`,
 	},
+	// Participantes de grupo do WhatsApp Web (FLU-1576): saem da mudanca da linha
+	// do participante, pelo evento do canal, pela varredura ou pela acao no CRM.
+	// O servidor so entrega a assinatura cuja chave e de usuario admin.
+	{
+		valor: 'grupo.participante.entrou',
+		rotulo: 'Grupo › Participante Entrou',
+		descricao: `Alguem entrou num grupo do WhatsApp Web. ${EXIGE_GRUPO} Identificador na API: grupo.participante.entrou`,
+	},
+	{
+		valor: 'grupo.participante.saiu',
+		rotulo: 'Grupo › Participante Saiu',
+		descricao: `Alguem saiu sozinho de um grupo do WhatsApp Web. ${EXIGE_GRUPO} Identificador na API: grupo.participante.saiu`,
+	},
+	{
+		valor: 'grupo.participante.removido',
+		rotulo: 'Grupo › Participante Removido',
+		descricao: `Um admin removeu alguem de um grupo do WhatsApp Web. ${EXIGE_GRUPO} Identificador na API: grupo.participante.removido`,
+	},
+	{
+		valor: 'grupo.participante.admin',
+		rotulo: 'Grupo › Admin Alterado',
+		descricao: `Alguem foi promovido a admin ou deixou de ser admin num grupo do WhatsApp Web. ${EXIGE_GRUPO} Identificador na API: grupo.participante.admin`,
+	},
 ];
 
 /** Os identificadores, na ordem do servidor — o fallback dos dois dropdowns. */
@@ -138,7 +164,7 @@ export function rotuloDoEvento(evento: string): string {
 	const [recurso, ...resto] = evento.split('.');
 	const acao = resto
 		.join('.')
-		.split('_')
+		.split(/[._]/)
 		.map((palavra) => palavra.charAt(0).toUpperCase() + palavra.slice(1))
 		.join(' ');
 	const entidade = recurso.charAt(0).toUpperCase() + recurso.slice(1);

@@ -181,9 +181,9 @@ describe('Poll Times', () => {
 });
 
 describe('catalogo do gatilho', () => {
-	it('espelha os 34 eventos do servidor e NAO oferece webhook.teste, que nao e assinavel', () => {
+	it('espelha os 38 eventos do servidor e NAO oferece webhook.teste, que nao e assinavel', () => {
 		// A lista completa, evento a evento, esta em `test/eventos.test.ts`.
-		expect(EVENTOS_CONHECIDOS).toHaveLength(34);
+		expect(EVENTOS_CONHECIDOS).toHaveLength(38);
 		expect(EVENTOS_CONHECIDOS).toContain('interacao.criada');
 		expect(EVENTOS_CONHECIDOS).toContain('negocio.estagio_alterado');
 		expect(EVENTOS_CONHECIDOS).toContain('conversa.iniciada');

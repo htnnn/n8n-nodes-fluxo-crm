@@ -12,6 +12,28 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Eventos de participante de grupo no gatilho e em `Webhook › Criar`/`Atualizar`:**
+  `Grupo › Participante Entrou`, `Participante Saiu`, `Participante Removido` e
+  `Admin Alterado` (`grupo.participante.entrou|saiu|removido|admin`). Cobrem os
+  grupos do WhatsApp Web e substituem a consulta periódica da lista de
+  participantes.
+
+### Corrigido
+
+- Evento desconhecido com mais de um ponto no nome ganha rótulo legível
+  (`grupo.convite.revogado` vira `Grupo › Convite Revogado`), em vez de manter o
+  ponto no meio do rótulo.
+
+### Limitações conhecidas
+
+- O servidor só entrega os eventos de grupo para assinatura cuja chave é de
+  **usuário admin**. Com a chave de outro cargo, a assinatura é criada e nada chega.
+- Exigem a API do Fluxo CRM de 15/10/2026 ou mais nova. Numa anterior, a
+  assinatura é recusada com 422 nomeando o evento.
+- Não há filtro por grupo na assinatura: filtre por `dados.grupo.id` no workflow.
+
 ## [0.6.0] - 2026-10-15
 
 ### Alterado

@@ -251,7 +251,7 @@ o seu caso, então vêm primeiro.
 
 Com a API que tem os **emissores de domínio** (`eventos-dominio.ts`), os
 eventos saem de qualquer porta — inclusive do que a equipe faz na tela do CRM —
-e existem os 34 eventos listados abaixo, com os de **etiqueta**, **atendimento**
+e existem os 38 eventos listados abaixo, com os de **etiqueta**, **atendimento**
 (`conversa.iniciada`, `conversa.resolvida`, `mensagem.recebida`,
 `mensagem.enviada`) e **automação**. "Disparar quando chegar mensagem no
 WhatsApp" é `mensagem.recebida`.
@@ -320,7 +320,7 @@ endereço público, use Sondagem.
 | **Ignorar Entrega de Teste**    | Descarta a entrega gerada pelo botão "Testar" do CRM (`webhook.teste`) |
 | **Incluir Metadados da Entrega** | Acrescenta `__entrega` à saída, com o ID e os cabeçalhos recebidos    |
 
-**Eventos disponíveis** (34, mais o coringa `*`):
+**Eventos disponíveis** (38, mais o coringa `*`):
 
 `contato.criado` · `contato.atualizado` · `contato.removido` ·
 `empresa.criada` · `empresa.atualizada` · `empresa.removida` ·
@@ -334,11 +334,25 @@ endereço público, use Sondagem.
 `etiqueta.adicionada` · `etiqueta.removida` ·
 `conversa.iniciada` · `conversa.resolvida` ·
 `mensagem.recebida` · `mensagem.enviada` ·
-`automacao.executada` · `automacao.falhou`
+`automacao.executada` · `automacao.falhou` ·
+`grupo.participante.entrou` · `grupo.participante.saiu` ·
+`grupo.participante.removido` · `grupo.participante.admin`
 
-Os oito últimos (etiqueta, atendimento e automação) só existem em instâncias
-cuja API já tem os emissores de domínio — numa anterior, a assinatura é
-recusada com 422 nomeando o evento. A lista do dropdown vem do servidor
+Os oito de etiqueta, atendimento e automação só existem em instâncias cuja API
+já tem os emissores de domínio — numa anterior, a assinatura é recusada com 422
+nomeando o evento.
+
+Os quatro de **participante de grupo** (WhatsApp Web) existem desde a API de
+15/10/2026:
+
+- `entrou`, `saiu` (saiu sozinho), `removido` (um admin removeu) e `admin`
+  (promovido ou rebaixado);
+- o servidor só entrega a assinatura cuja chave é de **usuário admin**: com a
+  chave de outro cargo, a assinatura é criada e nada chega;
+- `dados.origem` diz de onde veio o fato: `canal` (evento em tempo real),
+  `sincronizacao` (varredura da lista) ou `crm` (ação feita no CRM);
+- `dados.id_evento` é um por fato: use-o para descartar repetição;
+- para um grupo só, filtre por `dados.grupo.id` no workflow. A lista do dropdown vem do servidor
 (`GET /v1/webhooks/eventos`, que exige `webhooks:ler`). O node cai para a lista
 estática acima — nos dois nodes — em **dois** casos, e só neles: **403**, quando
 a chave só tem `webhooks:escrever` (os dois escopos são independentes, e uma

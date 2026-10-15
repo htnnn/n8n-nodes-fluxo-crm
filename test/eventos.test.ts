@@ -56,6 +56,10 @@ const EVENTOS_DISPONIVEIS_NO_SERVIDOR = [
 	'mensagem.enviada',
 	'automacao.executada',
 	'automacao.falhou',
+	'grupo.participante.entrou',
+	'grupo.participante.saiu',
+	'grupo.participante.removido',
+	'grupo.participante.admin',
 ];
 
 const BASE = 'https://api-crm.nafluxo.com.br/v1';
@@ -107,9 +111,9 @@ function semRede(): () => IDataObject {
 }
 
 describe('a tabela de eventos', () => {
-	it('e exatamente EVENTOS_DISPONIVEIS do servidor, os 34, na mesma ordem', () => {
+	it('e exatamente EVENTOS_DISPONIVEIS do servidor, os 38, na mesma ordem', () => {
 		expect([...EVENTOS_CONHECIDOS]).toEqual(EVENTOS_DISPONIVEIS_NO_SERVIDOR);
-		expect(EVENTOS_CONHECIDOS).toHaveLength(34);
+		expect(EVENTOS_CONHECIDOS).toHaveLength(38);
 		expect(EVENTOS_CONHECIDOS).not.toContain('webhook.teste');
 		expect(EVENTOS_CONHECIDOS).not.toContain(CORINGA_DE_EVENTOS);
 	});
@@ -153,6 +157,26 @@ describe('a tabela de eventos', () => {
 		expect(opcoes.get('mensagem.recebida')!.description).toContain('WhatsApp');
 	});
 
+	it('os quatro de participante de grupo levam rotulo proprio e avisam que so admin recebe', () => {
+		const grupo: Record<string, string> = {
+			'grupo.participante.entrou': 'Grupo › Participante Entrou',
+			'grupo.participante.saiu': 'Grupo › Participante Saiu',
+			'grupo.participante.removido': 'Grupo › Participante Removido',
+			'grupo.participante.admin': 'Grupo › Admin Alterado',
+		};
+
+		const opcoes = new Map(opcoesDeEvento(EVENTOS_CONHECIDOS).map((opcao) => [opcao.value, opcao]));
+		for (const [valor, rotulo] of Object.entries(grupo)) {
+			expect(rotuloDoEvento(valor)).toBe(rotulo);
+			const opcao = opcoes.get(valor)!;
+			expect(opcao.name).toBe(rotulo);
+			expect(opcao.description).toContain('WhatsApp');
+			expect(opcao.description).toContain('admin');
+			expect(opcao.description).toContain('instancia anterior');
+			expect(opcao.description).toContain(`Identificador na API: ${valor}`);
+		}
+	});
+
 	it('os rotulos dos 26 eventos antigos nao mudaram', () => {
 		expect(rotuloDoEvento('negocio.estagio_alterado')).toBe('Negocio › Estagio Alterado');
 		expect(rotuloDoEvento('nota.criada')).toBe('Nota › Criada');
@@ -166,6 +190,10 @@ describe('a tabela de eventos', () => {
 		expect(opcoes.map((opcao) => opcao.value)).toEqual([CORINGA_DE_EVENTOS, 'pipeline.estagio_criado']);
 		expect(opcoes[1].description).toBe('Identificador na API: pipeline.estagio_criado');
 	});
+
+	it('evento desconhecido com mais de um ponto tambem ganha rotulo legivel', () => {
+		expect(rotuloDoEvento('grupo.convite.revogado')).toBe('Grupo › Convite Revogado');
+	});
 });
 
 describe('o fallback e o mesmo nos dois nodes', () => {
@@ -175,12 +203,12 @@ describe('o fallback e o mesmo nos dois nodes', () => {
 	];
 
 	for (const [nome, carregar] of carregadores) {
-		it(`${nome}: sem webhooks:ler (403) cai para os 34 eventos, com o coringa primeiro`, async () => {
+		it(`${nome}: sem webhooks:ler (403) cai para os 38 eventos, com o coringa primeiro`, async () => {
 			const { ctx, caminhos, avisos } = criarContexto(recusarCom(403, 'escopo_insuficiente'));
 			const opcoes = (await carregar.call(ctx)) as Array<{ name: string; value: string }>;
 
 			expect(caminhos).toEqual(['/webhooks/eventos']);
-			expect(opcoes).toHaveLength(35);
+			expect(opcoes).toHaveLength(39);
 			expect(opcoes[0]).toMatchObject({ value: CORINGA_DE_EVENTOS, name: 'Todos os Eventos' });
 			expect(opcoes.slice(1).map((opcao) => opcao.value)).toEqual(EVENTOS_DISPONIVEIS_NO_SERVIDOR);
 			for (const opcao of opcoes) expect(opcao.name).not.toBe(opcao.value);
@@ -210,14 +238,14 @@ describe('o fallback e o mesmo nos dois nodes', () => {
 		it(`${nome}: resposta sem lista tambem cai para a estatica`, async () => {
 			const { ctx } = criarContexto(() => ({ dados: [] }));
 			const opcoes = (await carregar.call(ctx)) as Array<{ value: string }>;
-			expect(opcoes).toHaveLength(35);
+			expect(opcoes).toHaveLength(39);
 		});
 
-		it(`${nome}: 404 (instancia sem a rota) tambem cai para os 34 eventos`, async () => {
+		it(`${nome}: 404 (instancia sem a rota) tambem cai para os 38 eventos`, async () => {
 			const { ctx, avisos } = criarContexto(recusarCom(404, 'nao_encontrado'));
 			const opcoes = (await carregar.call(ctx)) as Array<{ value: string }>;
 
-			expect(opcoes).toHaveLength(35);
+			expect(opcoes).toHaveLength(39);
 			expect(opcoes.slice(1).map((opcao) => opcao.value)).toEqual(EVENTOS_DISPONIVEIS_NO_SERVIDOR);
 			expect(avisos.some((aviso) => aviso.includes('lista estatica'))).toBe(true);
 		});
