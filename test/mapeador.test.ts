@@ -401,3 +401,46 @@ describe('leitura do valor preenchido', () => {
 		});
 	});
 });
+
+/**
+ * FLU-1590 — campos que guardam id de outra entidade. Como texto livre, a
+ * pessoa precisava colar o uuid; o painel nao dizia nem de qual modulo.
+ *
+ * Como pode falhar:
+ *   - campo de usuario continua texto mesmo com a lista de usuarios em maos
+ *   - a lista vira dropdown vazio (sem usuarios, ou chave sem `meta:ler`)
+ *   - referencia sem dizer o modulo do alvo; o rotulo inventa modulo quando
+ *     o campo nao tem `moduloSlug`
+ */
+describe('campos que apontam para outra entidade', () => {
+	const usuarios = [
+		{ name: 'Ana Admin', value: 'u-ana' },
+		{ name: 'Bruno', value: 'u-bruno' },
+	];
+
+	it('campo de usuario vira lista de usuarios quando ela vem', () => {
+		const [dono] = camposParaMapeador([campo({ slug: 'indicado_por', nome: 'Indicado por', tipo: 'usuario' })], {
+			usuarios,
+		});
+		expect(dono).toMatchObject({ id: 'indicado_por', type: 'options', options: usuarios });
+	});
+
+	it('sem a lista (ou lista vazia), campo de usuario segue texto', () => {
+		const semLista = camposParaMapeador([campo({ tipo: 'usuario' })]);
+		const vazia = camposParaMapeador([campo({ tipo: 'usuario' })], { usuarios: [] });
+		expect(semLista[0].type).toBe('string');
+		expect(vazia[0].type).toBe('string');
+		expect(semLista[0].options).toBeUndefined();
+	});
+
+	it('referencia diz o modulo do alvo; sem modulo, nao inventa', () => {
+		const [comAlvo, semAlvo, conectado] = camposParaMapeador([
+			campo({ slug: 'contato', nome: 'Contato', tipo: 'referencia', opcoes: { moduloSlug: 'contatos' } }),
+			campo({ slug: 'livre', nome: 'Livre', tipo: 'referencia', opcoes: {} }),
+			campo({ slug: 'conexoes', nome: 'Conectado a', tipo: 'conectado_a' }),
+		]);
+		expect(comAlvo).toMatchObject({ type: 'string', displayName: 'Contato (id de contatos)' });
+		expect(semAlvo.displayName).toBe('Livre (id de registro)');
+		expect(conectado.displayName).toBe('Conectado a (ids de registros)');
+	});
+});
