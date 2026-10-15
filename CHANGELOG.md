@@ -12,6 +12,8 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+## [0.7.0] - 2026-10-15
+
 ### Adicionado
 
 - **Eventos de participante de grupo no gatilho e em `Webhook › Criar`/`Atualizar`:**
@@ -391,7 +393,8 @@ de gatilho resolve o seu caso.
   verificação oficial da n8n, porque a interface é em português e o processo de
   verificação exige inglês — então ele não aparece no n8n Cloud.
 
-[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.6.0...HEAD
+[Não publicado]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/htnnn/n8n-nodes-fluxo-crm/compare/v0.3.0...v0.4.0
