@@ -366,6 +366,25 @@ export interface OpcoesDoMapeador {
 	 * rota que o recusa com 422 seria prometer o que a API nao faz.
 	 */
 	deSistemaAceitos?: readonly string[];
+	/**
+	 * FLU-1590 — usuarios da org (`GET /usuarios`), para o campo de tipo
+	 * `usuario` virar lista em vez de texto onde se cola o uuid. Ausente ou
+	 * vazia (a lista nao pode ser lida), o campo segue texto: dropdown vazio
+	 * trava a edicao. Quem monta a lista e `resourceMapping.ts`.
+	 */
+	usuarios?: INodePropertyOptions[];
+}
+
+/**
+ * Rotulo de campo que guarda id de outra entidade: diz de qual modulo e o id.
+ * `referencia` sem `moduloSlug` aceita qualquer registro — o rotulo nao inventa.
+ */
+function rotuloComAlvo(nome: string, tipoDaApi: string, campo: IDataObject): string {
+	// A API exige LISTA (`["uuid", ...]`): texto com virgulas leva 422.
+	if (tipoDaApi === 'conectado_a') return `${nome} (lista de ids de registros, por expressão)`;
+	if (tipoDaApi !== 'referencia') return nome;
+	const alvo = texto(objeto(campo.opcoes).moduloSlug);
+	return alvo === '' ? `${nome} (id de registro)` : `${nome} (id de ${alvo})`;
 }
 
 /**
@@ -413,9 +432,10 @@ export function camposParaMapeador(
 		if (!deSistema && NOMES_DE_SISTEMA.has(slug)) throw new ColisaoComCampoDeSistema(slug);
 		if (deSistema && !aceitos.has(slug)) continue;
 
-		const tipo = TIPO_POR_CAMPO[tipoDaApi] ?? 'string';
-		const escolhas = tipo === 'options' ? escolhasDoCampo(campo) : undefined;
-		const nome = texto(campo.nome) || slug;
+		const usuarios = tipoDaApi === 'usuario' && (opcoes.usuarios?.length ?? 0) > 0 ? opcoes.usuarios : undefined;
+		const tipo = usuarios ? 'options' : (TIPO_POR_CAMPO[tipoDaApi] ?? 'string');
+		const escolhas = usuarios ?? (tipo === 'options' ? escolhasDoCampo(campo) : undefined);
+		const nome = rotuloComAlvo(texto(campo.nome) || slug, tipoDaApi, campo);
 
 		saida.push({
 			id: slug,

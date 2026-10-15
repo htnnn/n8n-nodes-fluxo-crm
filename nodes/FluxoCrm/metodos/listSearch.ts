@@ -5,6 +5,7 @@ import type {
 	INodeListSearchResult,
 } from 'n8n-workflow';
 
+import { camposDoModulo } from '../compartilhado/capacidades';
 import { requisitar } from '../compartilhado/transporte';
 
 /** Uma pagina de busca do `resourceLocator` — teto do servidor e 200. */
@@ -71,6 +72,21 @@ export async function buscarEmpresas(
 }
 
 /**
+ * Rotulo de um negocio na busca: o campo PRINCIPAL do modulo (FLU-1590), e so
+ * entao `titulo`, `nome` e o id. Antes caia no uuid sempre que a organizacao
+ * tinha renomeado o campo principal.
+ */
+export function rotuloDoNegocio(negocio: IDataObject, slugPrincipal: string | null): string {
+	const valores = (negocio.valores ?? {}) as IDataObject;
+	return (
+		(slugPrincipal ? texto(valores[slugPrincipal]) : '') ||
+		texto(valores.titulo) ||
+		texto(valores.nome) ||
+		texto(negocio.id)
+	);
+}
+
+/**
  * Busca de negocios para o modo "Da Lista".
  *
  * `GET /negocios` NAO aceita `busca` — os filtros dele sao por pipeline,
@@ -82,20 +98,18 @@ export async function buscarNegocios(
 	this: ILoadOptionsFunctions,
 	filtro?: string,
 ): Promise<INodeListSearchResult> {
-	const resposta = await requisitar(this, {
-		metodo: 'GET',
-		caminho: '/negocios',
-		query: { limite: LIMITE_DA_BUSCA },
-	});
+	const [resposta, campos] = await Promise.all([
+		requisitar(this, { metodo: 'GET', caminho: '/negocios', query: { limite: LIMITE_DA_BUSCA } }),
+		// Sem `meta:ler` o dicionario nao vem: o rotulo cai em titulo/nome.
+		camposDoModulo(this, 'negocios').catch(() => [] as IDataObject[]),
+	]);
+	const principal = campos.find((c) => c.is_primario === true);
+	const slugPrincipal = principal ? texto(principal.slug) || null : null;
 
 	const procurado = (filtro ?? '').trim().toLowerCase();
 
 	const resultados: INodeListSearchItems[] = dados(resposta.corpo)
-		.map((negocio) => {
-			const valores = (negocio.valores ?? {}) as IDataObject;
-			const rotulo = texto(valores.titulo) || texto(valores.nome) || texto(negocio.id);
-			return { name: rotulo, value: texto(negocio.id) };
-		})
+		.map((negocio) => ({ name: rotuloDoNegocio(negocio, slugPrincipal), value: texto(negocio.id) }))
 		.filter((item) => item.value !== '')
 		.filter((item) => procurado === '' || item.name.toLowerCase().includes(procurado));
 

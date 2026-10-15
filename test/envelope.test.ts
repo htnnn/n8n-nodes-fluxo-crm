@@ -519,7 +519,9 @@ describe('o mapper oferece o campo de sistema so onde a operacao o aceita', () =
 	it('registro: criar mostra dono e equipe; atualizar so equipe; auditoria nunca', async () => {
 		const criar = criarContextoDeOpcoes({ moduloSlug: 'imoveis', operation: 'criar' }, DICIONARIO);
 		const camposDeCriar = await mapearCamposDoModulo.call(criar.ctx);
-		expect(criar.caminhos).toEqual(['/modulos/imoveis/campos']);
+		// O dono e um campo de usuario oferecido: a lista de usuarios e lida depois.
+		expect(criar.caminhos[0]).toBe('/modulos/imoveis/campos');
+		expect(criar.caminhos).toContain('/usuarios');
 		expect(camposDeCriar.fields.map((campo) => campo.id)).toEqual(['titulo', 'dono_id', 'equipe_id']);
 		expect(camposDeCriar.fields[1].displayName).toBe('Responsavel (sistema)');
 
@@ -529,6 +531,8 @@ describe('o mapper oferece o campo de sistema so onde a operacao o aceita', () =
 		);
 		const camposDeAtualizar = await mapearCamposDoModulo.call(atualizar.ctx);
 		expect(camposDeAtualizar.fields.map((campo) => campo.id)).toEqual(['titulo', 'equipe_id']);
+		// Nenhum campo de usuario oferecido: `/usuarios` nao e consultado.
+		expect(atualizar.caminhos).toEqual(['/modulos/imoveis/campos']);
 	});
 
 	it('negocio: criar mostra o dono; atualizar nao mostra campo de sistema', async () => {

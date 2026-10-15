@@ -1,7 +1,12 @@
-import type { ILoadOptionsFunctions, IDataObject, ResourceMapperFields } from 'n8n-workflow';
+import type {
+	ILoadOptionsFunctions,
+	IDataObject,
+	INodePropertyOptions,
+	ResourceMapperFields,
+} from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
-import { camposDoModulo } from '../compartilhado/capacidades';
+import { camposDoModulo, listaDeDescoberta } from '../compartilhado/capacidades';
 import {
 	camposParaMapeador,
 	ColisaoComCampoDeSistema,
@@ -50,13 +55,14 @@ function deSistemaAceitos(ctx: ILoadOptionsFunctions, recurso: string): readonly
  * lista nao e devolvida pela metade: o painel mostra o motivo e o nome do
  * campo, e quem administra o CRM renomeia o slug.
  */
-function converter(
+async function converter(
 	ctx: ILoadOptionsFunctions,
 	campos: IDataObject[],
 	aceitos: readonly string[],
-): ResourceMapperFields {
+): Promise<ResourceMapperFields> {
+	const usuarios = await opcoesDeUsuario(ctx, campos, aceitos);
 	try {
-		return { fields: camposParaMapeador(campos, { deSistemaAceitos: aceitos }) };
+		return { fields: camposParaMapeador(campos, { deSistemaAceitos: aceitos, usuarios }) };
 	} catch (erro) {
 		if (erro instanceof ColisaoComCampoDeSistema) {
 			throw new NodeOperationError(ctx.getNode(), erro.message, {
@@ -65,6 +71,71 @@ function converter(
 		}
 		throw comoErroDoNode(ctx, erro, 'conversao do dicionario de campos');
 	}
+}
+
+/**
+ * FLU-1590 — campo de tipo `usuario` vira lista com os nomes. So consulta
+ * `/usuarios` quando o mapper vai OFERECER um campo assim (o de sistema conta
+ * so se a operacao o aceita).
+ *
+ * O resourceMapper grava as opcoes no `schema` do workflow, e o editor do n8n
+ * confere o valor salvo contra elas. Por isso:
+ * - o rotulo e so o nome; o e-mail entra apenas para desempatar homonimos,
+ *   para nao espalhar e-mails da equipe em todo workflow exportado;
+ * - valor ja salvo fora da lista (membro desativado, uuid em maiusculas,
+ *   texto livre) vira opcao propria, senao o editor acusa erro num workflow
+ *   que a API ainda aceita;
+ * - "nao enviar" (`''`) e opcao, porque linha vazia e o que a interface grava
+ *   e `valoresDoMapeador` ja a descarta.
+ * Se a lista nao puder ser lida (limite de requisicoes, falha passageira), o
+ * campo segue texto, como antes: o mapeador nao pode sumir por um dropdown.
+ */
+async function opcoesDeUsuario(
+	ctx: ILoadOptionsFunctions,
+	campos: IDataObject[],
+	aceitos: readonly string[],
+): Promise<INodePropertyOptions[] | undefined> {
+	const deUsuario = campos.filter(
+		(campo) =>
+			campo.tipo === 'usuario' && (campo.sistema !== true || aceitos.includes(String(campo.slug))),
+	);
+	if (deUsuario.length === 0) return undefined;
+
+	let linhas: IDataObject[];
+	try {
+		linhas = await listaDeDescoberta(ctx, 'usuarios');
+	} catch (erro) {
+		ctx.logger.warn(`Fluxo CRM: lista de usuarios indisponivel, campo de usuario segue texto (${String(erro)})`);
+		return undefined;
+	}
+	const ativos = linhas.filter((linha) => typeof linha.id === 'string' && linha.id !== '');
+	if (ativos.length === 0) return undefined;
+
+	const vezes = new Map<string, number>();
+	for (const linha of ativos) vezes.set(String(linha.nome), (vezes.get(String(linha.nome)) ?? 0) + 1);
+	const opcoes: INodePropertyOptions[] = [{ name: '— Não Enviar —', value: '' }];
+	for (const linha of ativos) {
+		const nome = String(linha.nome ?? '');
+		opcoes.push({
+			name: (vezes.get(nome) ?? 0) > 1 ? `${nome} (${String(linha.email ?? '')})` : nome,
+			value: String(linha.id),
+		});
+	}
+
+	const salvo = objeto(ctx.getCurrentNodeParameter('valores') ?? ctx.getCurrentNodeParameter('dados'));
+	const valoresSalvos = objeto(salvo.value);
+	const conhecidos = new Set(opcoes.map((opcao) => opcao.value));
+	for (const campo of deUsuario) {
+		const valor = valoresSalvos[String(campo.slug)];
+		if (typeof valor !== 'string' || valor.startsWith('=') || conhecidos.has(valor)) continue;
+		conhecidos.add(valor);
+		opcoes.push({ name: `${valor} (fora da lista de ativos)`, value: valor });
+	}
+	return opcoes;
+}
+
+function objeto(valor: unknown): IDataObject {
+	return typeof valor === 'object' && valor !== null && !Array.isArray(valor) ? (valor as IDataObject) : {};
 }
 
 function mapeadorDe(slug: string, recurso: string) {
