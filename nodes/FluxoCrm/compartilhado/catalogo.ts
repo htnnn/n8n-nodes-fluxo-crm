@@ -606,6 +606,29 @@ export const RECURSOS: RecursoDoCatalogo[] = [
 		],
 	},
 	{
+		valor: 'grupoAtendimento',
+		nome: 'Atendimento › Grupo',
+		descricao: 'Grupos de WhatsApp dos canais de atendimento e os participantes de cada um',
+		operacaoPadrao: 'listar',
+		operacoes: [
+			{
+				valor: 'listar',
+				nome: 'Listar',
+				acao: 'Listar os grupos de WhatsApp do atendimento',
+				descricao: 'Listar os grupos de WhatsApp do atendimento, com a contagem de participantes ativos',
+				escopo: 'atendimento:ler',
+			},
+			{
+				valor: 'listarParticipantes',
+				nome: 'Listar Participantes',
+				acao: 'Listar os participantes de um grupo de WhatsApp do atendimento',
+				descricao:
+					'Listar quem esta no grupo, quem saiu, ou quem entrou ou saiu desde uma data (atendimento)',
+				escopo: 'atendimento:ler',
+			},
+		],
+	},
+	{
 		valor: 'agenteAtendimento',
 		nome: 'Atendimento › Atendente',
 		descricao: 'Pessoas habilitadas a responder atendimentos',

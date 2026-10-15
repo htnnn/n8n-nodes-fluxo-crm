@@ -63,6 +63,7 @@ export const carregarOperacoesDeConversa = operacoesDe('conversa');
 export const carregarOperacoesDeMensagem = operacoesDe('mensagem');
 export const carregarOperacoesDeCanalAtendimento = operacoesDe('canalAtendimento');
 export const carregarOperacoesDeAgenteAtendimento = operacoesDe('agenteAtendimento');
+export const carregarOperacoesDeGrupoAtendimento = operacoesDe('grupoAtendimento');
 export const carregarOperacoesDeWebhook = operacoesDe('webhook');
 export const carregarOperacoesDeModulo = operacoesDe('modulo');
 export const carregarOperacoesDeEtiqueta = operacoesDe('etiqueta');

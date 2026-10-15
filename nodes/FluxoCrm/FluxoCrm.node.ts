@@ -70,6 +70,7 @@ import {
 	carregarOperacoesDeConversa,
 	carregarOperacoesDeEmpresa,
 	carregarOperacoesDeEtiqueta,
+	carregarOperacoesDeGrupoAtendimento,
 	carregarOperacoesDeInteracao,
 	carregarOperacoesDeLead,
 	carregarOperacoesDeLote,
@@ -315,6 +316,18 @@ export class FluxoCrm implements INodeType {
 				type: 'options',
 				noDataExpression: true,
 				default: 'listar',
+				displayOptions: { show: { resource: ['grupoAtendimento'] } },
+				typeOptions: { loadOptionsMethod: 'carregarOperacoesDeGrupoAtendimento' },
+				options: opcoesEstaticasDeOperacao(encontrarRecurso('grupoAtendimento')!),
+				description:
+					'Operacao a executar. Operacoes com cadeado exigem um escopo que a chave configurada nao tem — a razao aparece sob o nome.',
+			},
+			{
+				displayName: 'Operação',
+				name: 'operation',
+				type: 'options',
+				noDataExpression: true,
+				default: 'listar',
 				displayOptions: { show: { resource: ['webhook'] } },
 				typeOptions: { loadOptionsMethod: 'carregarOperacoesDeWebhook' },
 				options: opcoesEstaticasDeOperacao(encontrarRecurso('webhook')!),
@@ -409,6 +422,7 @@ export class FluxoCrm implements INodeType {
 			carregarOperacoesDeConversa,
 			carregarOperacoesDeEmpresa,
 			carregarOperacoesDeEtiqueta,
+			carregarOperacoesDeGrupoAtendimento,
 			carregarOperacoesDeInteracao,
 			carregarOperacoesDeLead,
 			carregarOperacoesDeLote,
@@ -498,7 +512,7 @@ export class FluxoCrm implements INodeType {
  * Encaminha para o executor do recurso.
  *
  * Atendimento e Plataforma recebem tambem o `recurso`, porque cada um atende
- * mais de um: os quatro recursos de atendimento compartilham o mesmo prefixo de
+ * mais de um: os cinco recursos de atendimento compartilham o mesmo prefixo de
  * rota, e os tres de plataforma compartilham a natureza de descoberta. Separa-los
  * em sete arquivos multiplicaria os cabecalhos sem separar regra nenhuma.
  */
@@ -537,6 +551,7 @@ async function despachar(
 		case 'mensagem':
 		case 'canalAtendimento':
 		case 'agenteAtendimento':
+		case 'grupoAtendimento':
 			return await executarAtendimento(ctx, recurso, operacao, i);
 		default:
 			return await executarPlataforma(ctx, recurso, operacao, i);
