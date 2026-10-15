@@ -12,6 +12,23 @@ que dá para montar, e quem instala precisa saber delas **antes**, não depois.
 
 ## [Não publicado]
 
+### Alterado
+
+- **Nomes no lugar de ids no painel do node.**
+  - Campo de tipo usuário no mapeador de campos (o Responsável incluído) vira
+    uma lista com os nomes dos usuários da organização. Antes era texto, onde
+    se colava o id. Sem o escopo `meta:ler` a lista não vem e o campo continua
+    texto, como antes.
+  - Campo de referência mostra no rótulo de qual módulo é o id esperado, por
+    exemplo "Contato (id de contatos)". "Conectado a" mostra "(ids de
+    registros)".
+  - A busca de negócios no modo "Da Lista" mostra o campo principal do módulo.
+    Antes mostrava `titulo` ou `nome` e caía no id quando a organização tinha
+    outro campo principal.
+- As saídas e o gatilho já trazem os nomes que a API passou a devolver junto
+  dos ids (`dono_nome`, `estagio_nome`, `valores_nomes` e afins). O node repassa
+  o corpo da API sem filtrar, então nada muda aqui para recebê-los.
+
 ## [0.5.0] - 2026-10-14
 
 ### Adicionado

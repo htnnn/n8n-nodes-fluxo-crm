@@ -1,4 +1,9 @@
-import type { ILoadOptionsFunctions, IDataObject, ResourceMapperFields } from 'n8n-workflow';
+import type {
+	ILoadOptionsFunctions,
+	IDataObject,
+	INodePropertyOptions,
+	ResourceMapperFields,
+} from 'n8n-workflow';
 import { NodeOperationError } from 'n8n-workflow';
 
 import { camposDoModulo } from '../compartilhado/capacidades';
@@ -9,6 +14,7 @@ import {
 	sistemaAceitoNoRecurso,
 } from '../compartilhado/mapeador';
 import { comoErroDoNode } from '../compartilhado/transporte';
+import { carregarUsuarios } from './loadOptions';
 
 /**
  * Os `resourceMapper` de campos definidos pela organizacao.
@@ -50,13 +56,14 @@ function deSistemaAceitos(ctx: ILoadOptionsFunctions, recurso: string): readonly
  * lista nao e devolvida pela metade: o painel mostra o motivo e o nome do
  * campo, e quem administra o CRM renomeia o slug.
  */
-function converter(
+async function converter(
 	ctx: ILoadOptionsFunctions,
 	campos: IDataObject[],
 	aceitos: readonly string[],
-): ResourceMapperFields {
+): Promise<ResourceMapperFields> {
+	const usuarios = await usuariosParaOsCampos(ctx, campos, aceitos);
 	try {
-		return { fields: camposParaMapeador(campos, { deSistemaAceitos: aceitos }) };
+		return { fields: camposParaMapeador(campos, { deSistemaAceitos: aceitos, usuarios }) };
 	} catch (erro) {
 		if (erro instanceof ColisaoComCampoDeSistema) {
 			throw new NodeOperationError(ctx.getNode(), erro.message, {
@@ -64,6 +71,28 @@ function converter(
 			});
 		}
 		throw comoErroDoNode(ctx, erro, 'conversao do dicionario de campos');
+	}
+}
+
+/**
+ * FLU-1590 — campo de tipo `usuario` vira lista com os nomes. So consulta
+ * `/usuarios` quando o mapper vai OFERECER um campo assim (o de sistema conta
+ * so se a operacao o aceita). Sem a lista (chave sem
+ * `meta:ler`, por exemplo) o campo segue texto, como antes: o mapeador nao pode
+ * sumir por causa de um dropdown.
+ */
+async function usuariosParaOsCampos(
+	ctx: ILoadOptionsFunctions,
+	campos: IDataObject[],
+	aceitos: readonly string[],
+): Promise<INodePropertyOptions[] | undefined> {
+	const oferecido = (campo: IDataObject) =>
+		campo.sistema !== true || aceitos.includes(String(campo.slug));
+	if (!campos.some((campo) => campo.tipo === 'usuario' && oferecido(campo))) return undefined;
+	try {
+		return await carregarUsuarios.call(ctx);
+	} catch {
+		return undefined;
 	}
 }
 
