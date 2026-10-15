@@ -35,7 +35,7 @@ export const descricaoDoGatilho: INodeProperties[] = [
 	// ── Webhook ──────────────────────────────────────────────────────
 	{
 		displayName:
-			'A lista traz os 34 eventos que a API atual emite, inclusive os de etiqueta, atendimento (conversa iniciada/resolvida, mensagem recebida/enviada) e automacao. Numa instancia com API anterior, os eventos so disparam para escrita feita PELA API v1 — o que a equipe faz na tela nao emite — e os oito mais novos nao existem: a assinatura e recusada. Para reagir a atendimento nessas instancias, use o modo Sondagem.',
+			'A lista traz os 38 eventos que a API atual emite, inclusive os de etiqueta, atendimento (conversa iniciada/resolvida, mensagem recebida/enviada), automacao e participante de grupo (este so chega para chave de usuario admin). Numa instancia com API anterior, os eventos so disparam para escrita feita PELA API v1 — o que a equipe faz na tela nao emite — e os eventos mais novos nao existem: a assinatura e recusada. Para reagir a atendimento nessas instancias, use o modo Sondagem.',
 		name: 'avisoDoWebhook',
 		type: 'notice',
 		default: '',
